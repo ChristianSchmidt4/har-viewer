@@ -2,6 +2,21 @@
 
 This document provides specific guidance for using Claude Code with this HAR Viewer project.
 
+## Keeping This Document Current
+
+This file (and any other agentic-instruction file in this repo, e.g. a
+future `AGENTS.md` or per-directory `CLAUDE.md`) must be kept in sync with
+the code as part of the same change — not as a follow-up. Whenever a change
+adds, removes, or alters a component, utility, syntax, workflow, or
+convention described here, update the relevant section(s) in this same
+commit. This includes (non-exhaustively):
+- Adding/removing a component or utility, or changing its public behavior
+- Changing the filter query syntax, HAR parsing, or detail panel tabs
+- Adding/removing a "Common Tasks" how-to, or changing its steps
+- Changing testing, build, or deployment setup
+
+If unsure whether a change is doc-worthy, err toward updating this file.
+
 ## Project Overview
 
 This is a client-side HTTP Archive (HAR) viewer inspired by Fiddler. A user
