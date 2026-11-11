@@ -1071,6 +1071,11 @@ body.resizing-vertical * {
   align-items: center;
   gap: 0.6rem;
   font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.timeline-row:hover {
+  background: rgba(127, 127, 127, 0.12);
 }
 
 .timeline-label {

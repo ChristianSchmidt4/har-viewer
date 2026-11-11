@@ -112,12 +112,14 @@ export class DetailPanel {
   private activeAggregateTab: AggregateTabKey;
   private fixedTimelineScale: boolean;
   private activeFontFace: FontFace | null = null;
+  private onTimelineRowClick?: (entry: ParsedEntry) => void;
 
-  constructor() {
+  constructor({ onTimelineRowClick }: { onTimelineRowClick?: (entry: ParsedEntry) => void } = {}) {
     this.harParser = new HarParser();
     this.containerEl = document.getElementById('detail-panel')!;
     this.emptyStateEl = document.getElementById('detail-empty-state')!;
     this.contentEl = document.getElementById('detail-content')!;
+    this.onTimelineRowClick = onTimelineRowClick;
 
     // Remembers the active sub-tab per side so re-selecting a request keeps
     // the user's place (e.g. stay on "Raw" while clicking through rows).
@@ -200,7 +202,21 @@ export class DetailPanel {
     `;
 
     this.bindAggregateTabs(entries);
+    this.bindTimelineRowClicks(entries);
     this.renderAggregatePanel(entries);
+  }
+
+  // Clicking a timeline row hands that entry back so the request table can
+  // select just that row and the detail view shows it.
+  private bindTimelineRowClicks(entries: ParsedEntry[]): void {
+    const panelEl = this.contentEl.querySelector<HTMLElement>('[data-aggregate-panel]')!;
+    panelEl.addEventListener('click', (event) => {
+      const rowEl = (event.target as HTMLElement).closest<HTMLElement>('.timeline-row[data-entry-id]');
+      if (!rowEl || !this.onTimelineRowClick) return;
+      const entryId = parseInt(rowEl.dataset.entryId!, 10);
+      const entry = entries.find(e => e.id === entryId);
+      if (entry) this.onTimelineRowClick(entry);
+    });
   }
 
   private bindAggregateTabs(entries: ParsedEntry[]): void {
@@ -266,7 +282,7 @@ export class DetailPanel {
         .join('');
 
       return `
-        <div class="timeline-row">
+        <div class="timeline-row" data-entry-id="${entry.id}">
           <div class="timeline-label" title="${rowTooltip}">
             <span class="timeline-method">${escapeHtml(entry.request.method)}</span>
             ${escapeHtml(entry.path || entry.request.url)}

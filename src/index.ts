@@ -48,7 +48,9 @@ class HarViewerApp {
       }
     });
 
-    this.detailPanel = new DetailPanel();
+    this.detailPanel = new DetailPanel({
+      onTimelineRowClick: (entry) => this.requestTable.selectSingleEntry(entry.id)
+    });
 
     new HighlightBar({
       onChange: (rules) => this.requestTable.setHighlightRules(rules)

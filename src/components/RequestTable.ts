@@ -202,6 +202,20 @@ export class RequestTable {
     this.render();
   }
 
+  // Selects only the given entry (as a click would), scrolling it into view
+  // when it is part of the currently filtered list.
+  selectSingleEntry(entryId: number): void {
+    const index = this.visibleEntries.findIndex(e => e.id === entryId);
+    if (index !== -1) {
+      const rowTop = index * this.rowHeight;
+      const viewBottom = this.scrollEl.scrollTop + this.scrollEl.clientHeight;
+      if (rowTop < this.scrollEl.scrollTop || rowTop + this.rowHeight > viewBottom) {
+        this.scrollEl.scrollTop = Math.max(0, rowTop - this.scrollEl.clientHeight / 2);
+      }
+    }
+    this.selectEntry(entryId);
+  }
+
   // Returns the entries currently passing the filter (same objects as
   // allEntries, so entry.id maps back to the original HAR entry index).
   getVisibleEntries(): ParsedEntry[] {

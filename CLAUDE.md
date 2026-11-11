@@ -103,7 +103,8 @@ is needed for development. See [TypeScript](#typescript) below.
    selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
    `onMultiSelect(entries)`. Exposes `getVisibleEntries()` so other
    components (e.g. the Export button in `index.ts`) can get the currently
-   filtered-in entries.
+   filtered-in entries, and `selectSingleEntry(id)` so the detail panel's
+   timeline can select one row programmatically.
    **Windowed rendering**: only the rows inside the `.request-table-scroll`
    viewport (plus `OVERSCAN_ROWS` above/below) are in the DOM; the rest is
    represented by `tr.spacer` rows whose heights keep the scrollbar at full
@@ -157,7 +158,11 @@ is needed for development. See [TypeScript](#typescript) below.
      range instead of having everything squeezed to fit. Hovering a row
      (`buildTimelineRowTooltip`) shows a full-detail tooltip: method + URL,
      status, absolute start time, total time, every non-zero timing phase,
-     and request/response header/body sizes.
+     and request/response header/body sizes. Clicking a row selects only
+     that entry in the request table (`RequestTable.selectSingleEntry`,
+     scrolling it into view) and the detail panel switches to its
+     single-request view; wired via the `onTimelineRowClick` option of
+     `DetailPanel`.
    - **Stats**: renders `computeAggregateStats` as Fiddler's classic
      "Statistics" text block - request count; bytes sent/received (with
      headers/body breakdown); actual performance (start/end clock times,
