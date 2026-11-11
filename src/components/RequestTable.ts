@@ -5,8 +5,14 @@
 import { HarParser } from '../utils/harParser.js';
 import { filterEntries } from '../utils/filterParser.js';
 import { escapeHtml, truncateText } from '../utils/domUtils.js';
+import type { ParsedEntry } from '../types/har.js';
 
-const COLUMNS = [
+interface Column {
+  key: string;
+  label: string;
+}
+
+const COLUMNS: Column[] = [
   { key: 'index', label: '#' },
   { key: 'status', label: 'Code' },
   { key: 'protocol', label: 'Protocol' },
@@ -18,8 +24,25 @@ const COLUMNS = [
   { key: 'startOffset', label: 'Start' }
 ];
 
+export interface RequestTableOptions {
+  onSelect: (entry: ParsedEntry) => void;
+}
+
 export class RequestTable {
-  constructor({ onSelect }) {
+  private onSelect: (entry: ParsedEntry) => void;
+  private harParser: HarParser;
+
+  private allEntries: ParsedEntry[];
+  private visibleEntries: ParsedEntry[];
+  private selectedEntryId: number | null;
+  private filterDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private filterInputEl: HTMLInputElement;
+  private filterHintEl: HTMLElement;
+  private tableBodyEl: HTMLElement;
+  private resultCountEl: HTMLElement;
+
+  constructor({ onSelect }: RequestTableOptions) {
     this.onSelect = onSelect;
     this.harParser = new HarParser();
 
@@ -27,15 +50,15 @@ export class RequestTable {
     this.visibleEntries = [];
     this.selectedEntryId = null;
 
-    this.filterInputEl = document.getElementById('request-filter');
-    this.filterHintEl = document.getElementById('filter-hint');
-    this.tableBodyEl = document.getElementById('requests-table-body');
-    this.resultCountEl = document.getElementById('result-count');
+    this.filterInputEl = document.getElementById('request-filter') as HTMLInputElement;
+    this.filterHintEl = document.getElementById('filter-hint')!;
+    this.tableBodyEl = document.getElementById('requests-table-body')!;
+    this.resultCountEl = document.getElementById('result-count')!;
 
     this.bindEvents();
   }
 
-  bindEvents() {
+  private bindEvents(): void {
     this.filterInputEl.addEventListener('input', () => {
       clearTimeout(this.filterDebounceTimer);
       this.filterDebounceTimer = setTimeout(() => this.applyFilter(), 250);
@@ -50,13 +73,13 @@ export class RequestTable {
     });
 
     this.tableBodyEl.addEventListener('click', (event) => {
-      const row = event.target.closest('tr[data-entry-id]');
+      const row = (event.target as HTMLElement).closest<HTMLElement>('tr[data-entry-id]');
       if (!row) return;
-      this.selectEntry(parseInt(row.dataset.entryId, 10));
+      this.selectEntry(parseInt(row.dataset.entryId!, 10));
     });
   }
 
-  setEntries(entries) {
+  setEntries(entries: ParsedEntry[]): void {
     this.allEntries = entries;
     this.selectedEntryId = null;
     this.filterInputEl.value = '';
@@ -65,17 +88,17 @@ export class RequestTable {
 
   // Returns the entries currently passing the filter (same objects as
   // allEntries, so entry.id maps back to the original HAR entry index).
-  getVisibleEntries() {
+  getVisibleEntries(): ParsedEntry[] {
     return this.visibleEntries;
   }
 
-  applyFilter() {
+  applyFilter(): void {
     const query = this.filterInputEl.value;
     this.visibleEntries = filterEntries(this.allEntries, query);
     this.render();
   }
 
-  render() {
+  private render(): void {
     this.tableBodyEl.innerHTML = '';
     const fragment = document.createDocumentFragment();
 
@@ -87,9 +110,9 @@ export class RequestTable {
     this.updateResultCount();
   }
 
-  buildRow(entry) {
+  private buildRow(entry: ParsedEntry): HTMLTableRowElement {
     const row = document.createElement('tr');
-    row.dataset.entryId = entry.id;
+    row.dataset.entryId = String(entry.id);
     if (entry.id === this.selectedEntryId) {
       row.classList.add('selected');
     }
@@ -118,17 +141,17 @@ export class RequestTable {
     return row;
   }
 
-  selectEntry(entryId) {
+  private selectEntry(entryId: number): void {
     this.selectedEntryId = entryId;
-    this.tableBodyEl.querySelectorAll('tr[data-entry-id]').forEach(row => {
-      row.classList.toggle('selected', parseInt(row.dataset.entryId, 10) === entryId);
+    this.tableBodyEl.querySelectorAll<HTMLElement>('tr[data-entry-id]').forEach(row => {
+      row.classList.toggle('selected', parseInt(row.dataset.entryId!, 10) === entryId);
     });
 
     const entry = this.allEntries.find(e => e.id === entryId);
     if (entry) this.onSelect(entry);
   }
 
-  updateResultCount() {
+  private updateResultCount(): void {
     const total = this.allEntries.length;
     const visible = this.visibleEntries.length;
     this.resultCountEl.textContent = visible === total

@@ -1,16 +1,55 @@
 import { filterEntries } from '../src/utils/filterParser.js';
+import type { ParsedEntry, ParsedRequest, ParsedResponse } from '../src/types/har.js';
 
-function makeEntry(overrides = {}) {
+function makeEntry(overrides: Partial<Omit<ParsedEntry, 'request' | 'response'>> & {
+  request?: Partial<ParsedRequest>;
+  response?: Partial<ParsedResponse>;
+} = {}): ParsedEntry {
+  const request: ParsedRequest = {
+    method: 'GET',
+    url: 'https://example.com/',
+    httpVersion: '',
+    cookies: [],
+    headers: [],
+    queryString: [],
+    postData: null,
+    headersSize: -1,
+    bodySize: -1,
+    comment: '',
+    ...overrides.request
+  };
+  const response: ParsedResponse = {
+    status: 200,
+    statusText: '',
+    httpVersion: '',
+    cookies: [],
+    headers: [],
+    content: { size: 0, compression: 0, mimeType: '', text: '', encoding: '', comment: '' },
+    redirectURL: '',
+    headersSize: -1,
+    bodySize: 500,
+    comment: '',
+    ...overrides.response
+  };
+
   return {
     id: 0,
+    startedDateTime: '',
+    startedTimeMs: 0,
+    relativeStartMs: 0,
+    time: 100,
+    cache: {},
+    timings: {},
+    serverIPAddress: '',
+    connection: '',
+    comment: '',
     host: 'example.com',
     path: '/',
     protocol: 'HTTP/1.1',
     contentType: 'html',
-    time: 100,
-    request: { method: 'GET', url: 'https://example.com/' },
-    response: { status: 200, bodySize: 500 },
-    ...overrides
+    ...overrides,
+    request,
+    response
   };
 }
 

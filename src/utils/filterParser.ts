@@ -30,9 +30,47 @@
 //   reqheader:user-agent=chromium
 //   reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id
 //   (status:>=400 or duration:>500) and -type:image
+import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
 
-const NUMERIC_FIELDS = new Set(['status', 'duration', 'size']);
-const FIELD_ALIASES = {
+type FieldName = 'method' | 'status' | 'host' | 'path' | 'protocol' | 'contentType' | 'duration' | 'size';
+type HeaderCookieSide = 'reqHeader' | 'resHeader' | 'reqCookie' | 'resCookie';
+type NumericOperator = '>' | '<' | '>=' | '<=';
+
+interface PlainClause {
+  kind: 'plain';
+  negate: boolean;
+  value: string;
+}
+
+interface FieldClause {
+  kind: 'field';
+  negate: boolean;
+  field: FieldName;
+  operator: 'equals' | 'contains' | NumericOperator;
+  value: string;
+}
+
+interface HeaderCookieClause {
+  kind: 'headerCookie';
+  side: HeaderCookieSide;
+  negate: boolean;
+  operator: 'exists' | 'contains';
+  name: string;
+  value?: string;
+}
+
+type Clause = PlainClause | FieldClause | HeaderCookieClause;
+
+type AstNode =
+  | { type: 'and'; left: AstNode; right: AstNode }
+  | { type: 'or'; left: AstNode; right: AstNode }
+  | { type: 'not'; node: AstNode }
+  | { type: 'clause'; clause: Clause };
+
+type Token = { type: 'word'; value: string } | { type: '(' } | { type: ')' };
+
+const NUMERIC_FIELDS = new Set<FieldName>(['status', 'duration', 'size']);
+const FIELD_ALIASES: Record<string, FieldName> = {
   method: 'method',
   status: 'status',
   code: 'status',
@@ -48,7 +86,7 @@ const FIELD_ALIASES = {
   size: 'size'
 };
 
-const HEADER_COOKIE_ALIASES = {
+const HEADER_COOKIE_ALIASES: Record<string, HeaderCookieSide> = {
   reqheader: 'reqHeader',
   requestheader: 'reqHeader',
   resheader: 'resHeader',
@@ -59,40 +97,40 @@ const HEADER_COOKIE_ALIASES = {
   responsecookie: 'resCookie'
 };
 
-function parseSizeToBytes(value) {
+function parseSizeToBytes(value: string): number {
   const match = /^([\d.]+)\s*(b|kb|mb|gb)?$/i.exec(value.trim());
   if (!match) return parseFloat(value) || 0;
-  const num = parseFloat(match[1]);
+  const num = parseFloat(match[1]!);
   const unit = (match[2] || 'b').toLowerCase();
-  const multipliers = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 };
+  const multipliers: Record<string, number> = { b: 1, kb: 1024, mb: 1024 ** 2, gb: 1024 ** 3 };
   return num * (multipliers[unit] || 1);
 }
 
-function parseDurationToMs(value) {
+function parseDurationToMs(value: string): number {
   const match = /^([\d.]+)\s*(ms|s)?$/i.exec(value.trim());
   if (!match) return parseFloat(value) || 0;
-  const num = parseFloat(match[1]);
+  const num = parseFloat(match[1]!);
   const unit = (match[2] || 'ms').toLowerCase();
   return unit === 's' ? num * 1000 : num;
 }
 
 // Tokenizes the raw query string into words/parens, respecting "quoted
 // phrases" (exported for testing).
-export function tokenize(query) {
-  const tokens = [];
+export function tokenize(query: string): Token[] {
+  const tokens: Token[] = [];
   const regex = /"([^"]*)"|'([^']*)'|(\()|(\))|([^\s()]+)/g;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = regex.exec(query)) !== null) {
     if (match[1] !== undefined) tokens.push({ type: 'word', value: match[1] });
     else if (match[2] !== undefined) tokens.push({ type: 'word', value: match[2] });
     else if (match[3] !== undefined) tokens.push({ type: '(' });
     else if (match[4] !== undefined) tokens.push({ type: ')' });
-    else tokens.push({ type: 'word', value: match[5] });
+    else tokens.push({ type: 'word', value: match[5]! });
   }
   return tokens;
 }
 
-function parseLeafClause(token) {
+function parseLeafClause(token: string): Clause {
   let negate = false;
   let raw = token;
   if (raw.startsWith('-') && raw.length > 1) {
@@ -129,12 +167,12 @@ function parseLeafClause(token) {
     return { kind: 'plain', negate, value: raw.toLowerCase() };
   }
 
-  let operator = 'equals';
+  let operator: FieldClause['operator'] = 'equals';
   if (NUMERIC_FIELDS.has(field)) {
     const opMatch = /^(>=|<=|>|<)(.+)$/.exec(value);
     if (opMatch) {
-      operator = opMatch[1];
-      value = opMatch[2];
+      operator = opMatch[1] as NumericOperator;
+      value = opMatch[2]!;
     }
   } else {
     operator = 'contains';
@@ -144,15 +182,15 @@ function parseLeafClause(token) {
 }
 
 // Recursive-descent parser: or < and (implicit or explicit) < not < atom.
-function parseExpr(tokens) {
+function parseExpr(tokens: Token[]): AstNode | null {
   let pos = 0;
 
-  function peek() { return tokens[pos]; }
-  function isKeyword(tok, word) {
-    return tok && tok.type === 'word' && tok.value.toLowerCase() === word;
+  function peek(): Token | undefined { return tokens[pos]; }
+  function isKeyword(tok: Token | undefined, word: string): boolean {
+    return !!tok && tok.type === 'word' && tok.value.toLowerCase() === word;
   }
 
-  function parseOr() {
+  function parseOr(): AstNode {
     let left = parseAnd();
     while (isKeyword(peek(), 'or')) {
       pos++;
@@ -162,9 +200,9 @@ function parseExpr(tokens) {
     return left;
   }
 
-  function parseAnd() {
+  function parseAnd(): AstNode {
     let left = parseNot();
-    while (peek() && peek().type !== ')' && !isKeyword(peek(), 'or')) {
+    while (peek() && peek()!.type !== ')' && !isKeyword(peek(), 'or')) {
       if (isKeyword(peek(), 'and')) pos++;
       const right = parseNot();
       left = { type: 'and', left, right };
@@ -172,7 +210,7 @@ function parseExpr(tokens) {
     return left;
   }
 
-  function parseNot() {
+  function parseNot(): AstNode {
     if (isKeyword(peek(), 'not')) {
       pos++;
       return { type: 'not', node: parseNot() };
@@ -180,24 +218,24 @@ function parseExpr(tokens) {
     return parseAtom();
   }
 
-  function parseAtom() {
+  function parseAtom(): AstNode {
     const tok = peek();
     if (!tok) return { type: 'clause', clause: { kind: 'plain', negate: false, value: '' } };
     if (tok.type === '(') {
       pos++;
       const node = parseOr();
-      if (peek() && peek().type === ')') pos++;
+      if (peek() && peek()!.type === ')') pos++;
       return node;
     }
     pos++;
-    return { type: 'clause', clause: parseLeafClause(tok.value) };
+    return { type: 'clause', clause: parseLeafClause((tok as { type: 'word'; value: string }).value) };
   }
 
   if (!tokens.length) return null;
   return parseOr();
 }
 
-function getFieldValue(entry, field) {
+function getFieldValue(entry: ParsedEntry, field: FieldName): string | number {
   switch (field) {
     case 'method': return entry.request.method || '';
     case 'status': return entry.response.status || 0;
@@ -211,13 +249,13 @@ function getFieldValue(entry, field) {
   }
 }
 
-function coerceNumericValue(field, value) {
+function coerceNumericValue(field: FieldName, value: string): number {
   if (field === 'size') return parseSizeToBytes(value);
   if (field === 'duration') return parseDurationToMs(value);
   return parseFloat(value) || 0;
 }
 
-function getHeaderCookieList(entry, side) {
+function getHeaderCookieList(entry: ParsedEntry, side: HeaderCookieSide): (HarHeader | HarCookie)[] {
   switch (side) {
     case 'reqHeader': return entry.request.headers || [];
     case 'resHeader': return entry.response.headers || [];
@@ -227,8 +265,8 @@ function getHeaderCookieList(entry, side) {
   }
 }
 
-function matchesClause(entry, clause) {
-  let matched;
+function matchesClause(entry: ParsedEntry, clause: Clause): boolean {
+  let matched: boolean;
 
   if (clause.kind === 'plain') {
     const haystack = `${entry.request.method} ${entry.request.url}`.toLowerCase();
@@ -239,10 +277,10 @@ function matchesClause(entry, clause) {
       matched = list.some(h => (h.name || '').toLowerCase() === clause.name);
     } else {
       matched = list.some(h => (h.name || '').toLowerCase() === clause.name
-        && (h.value || '').toLowerCase().includes(clause.value.toLowerCase()));
+        && (h.value || '').toLowerCase().includes((clause.value || '').toLowerCase()));
     }
   } else if (NUMERIC_FIELDS.has(clause.field)) {
-    const fieldValue = getFieldValue(entry, clause.field);
+    const fieldValue = getFieldValue(entry, clause.field) as number;
     const compareValue = coerceNumericValue(clause.field, clause.value);
     switch (clause.operator) {
       case '>': matched = fieldValue > compareValue; break;
@@ -259,7 +297,7 @@ function matchesClause(entry, clause) {
   return clause.negate ? !matched : matched;
 }
 
-function evaluate(node, entry) {
+function evaluate(node: AstNode | null, entry: ParsedEntry): boolean {
   if (!node) return true;
   switch (node.type) {
     case 'and': return evaluate(node.left, entry) && evaluate(node.right, entry);
@@ -271,12 +309,12 @@ function evaluate(node, entry) {
 }
 
 // Parses a raw query string into an AST (exported for testing).
-export function parseFilterQuery(query) {
+export function parseFilterQuery(query: string): AstNode | null {
   return parseExpr(tokenize((query || '').trim()));
 }
 
 // Returns a filtered array of entries matching the given query string.
-export function filterEntries(entries, query) {
+export function filterEntries(entries: ParsedEntry[], query: string): ParsedEntry[] {
   const ast = parseFilterQuery(query);
   if (!ast) return entries;
   return entries.filter(entry => evaluate(ast, entry));

@@ -1,12 +1,12 @@
 // Small, dependency-free DOM/string helpers shared across components.
 
-export function escapeHtml(text) {
+export function escapeHtml(text: unknown): string {
   const div = document.createElement('div');
   div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
 }
 
-export function truncateUrl(url, maxLength) {
+export function truncateUrl(url: string, maxLength: number): string {
   if (!url) return '';
   if (url.length <= maxLength) return url;
 
@@ -27,14 +27,14 @@ export function truncateUrl(url, maxLength) {
   }
 }
 
-export function truncateText(text, maxLength) {
+export function truncateText(text: string, maxLength: number): string {
   if (!text) return '';
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '\n\n... (truncated)';
 }
 
 // Creates an element from an HTML string (first element child only).
-export function createElementFromHtml(html) {
+export function createElementFromHtml(html: string): Element | null {
   const template = document.createElement('template');
   template.innerHTML = html.trim();
   return template.content.firstElementChild;

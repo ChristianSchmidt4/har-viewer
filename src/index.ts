@@ -3,10 +3,19 @@ import { FileDropZone } from './components/FileDropZone.js';
 import { RequestTable } from './components/RequestTable.js';
 import { DetailPanel } from './components/DetailPanel.js';
 import { makeResizer } from './utils/resizer.js';
+import type { HarData } from './types/har.js';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
 class HarViewerApp {
+  private harParser: HarParser;
+  private currentHarData: HarData | null;
+  private currentFileName: string | null;
+  private dropZone: FileDropZone;
+  private requestTable: RequestTable;
+  private detailPanel: DetailPanel;
+  private errorTimeout: ReturnType<typeof setTimeout> | undefined;
+
   constructor() {
     this.harParser = new HarParser();
     this.currentHarData = null;
@@ -26,14 +35,14 @@ class HarViewerApp {
     this.init();
   }
 
-  init() {
-    document.getElementById('load-new-btn').addEventListener('click', () => this.resetToDropScreen());
-    document.getElementById('export-btn').addEventListener('click', () => this.exportData());
+  private init(): void {
+    document.getElementById('load-new-btn')!.addEventListener('click', () => this.resetToDropScreen());
+    document.getElementById('export-btn')!.addEventListener('click', () => this.exportData());
 
     makeResizer({
-      splitterEl: document.getElementById('main-splitter'),
-      targetEl: document.getElementById('request-list-container'),
-      containerEl: document.querySelector('.main-layout'),
+      splitterEl: document.getElementById('main-splitter')!,
+      targetEl: document.getElementById('request-list-container')!,
+      containerEl: document.querySelector('.main-layout')!,
       direction: 'horizontal',
       min: 280
     });
@@ -45,7 +54,7 @@ class HarViewerApp {
   // to any server, only parsed in-memory in the browser. Transparently
   // gunzips .har.gz / .gz files via the native DecompressionStream before
   // parsing the JSON.
-  async handleFile(file) {
+  private async handleFile(file: File): Promise<void> {
     try {
       const { harData, uncompressedSize } = await this.readFileAsJson(file);
       this.currentHarData = harData;
@@ -54,22 +63,23 @@ class HarViewerApp {
       const parsedData = this.harParser.parse(harData);
 
       this.dropZone.hide();
-      document.getElementById('har-content').classList.remove('hidden');
+      document.getElementById('har-content')!.classList.remove('hidden');
       this.displayFileInfo(file.name, file.size, uncompressedSize);
 
       this.requestTable.setEntries(parsedData.entries);
       this.detailPanel.showEmptyState();
     } catch (error) {
       console.error('Error processing HAR file:', error);
+      const message = error instanceof Error ? error.message : '';
       this.showErrorMessage(
-        error.message && error.message.includes('Invalid HAR')
-          ? error.message
+        message.includes('Invalid HAR')
+          ? message
           : 'Failed to process HAR file. Please ensure it is a valid HAR (JSON) file.'
       );
     }
   }
 
-  async readFileAsJson(file) {
+  private async readFileAsJson(file: File): Promise<{ harData: HarData; uncompressedSize: number | null }> {
     const isGzipped = /\.gz$/i.test(file.name);
     const text = isGzipped
       ? await this.readGzipFileAsText(file)
@@ -85,51 +95,51 @@ class HarViewerApp {
     }
   }
 
-  readFileAsText(file) {
+  private readFileAsText(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (event) => resolve(event.target.result);
+      reader.onload = (event) => resolve(event.target!.result as string);
       reader.onerror = () => reject(new Error('Error reading file'));
       reader.readAsText(file);
     });
   }
 
-  async readGzipFileAsText(file) {
+  private async readGzipFileAsText(file: File): Promise<string> {
     const decompressedStream = file.stream().pipeThrough(new DecompressionStream('gzip'));
     return new Response(decompressedStream).text();
   }
 
-  displayFileInfo(fileName, fileSize, uncompressedSize) {
-    const fileInfoDiv = document.getElementById('file-info');
+  private displayFileInfo(fileName: string, fileSize: number, uncompressedSize: number | null): void {
+    const fileInfoDiv = document.getElementById('file-info')!;
     const sizeText = uncompressedSize != null
       ? `${this.harParser.formatBytes(fileSize)} compressed, ${this.harParser.formatBytes(uncompressedSize)} uncompressed`
       : this.harParser.formatBytes(fileSize);
     fileInfoDiv.textContent = `${fileName} (${sizeText})`;
   }
 
-  resetToDropScreen() {
+  private resetToDropScreen(): void {
     this.currentHarData = null;
     this.currentFileName = null;
-    document.getElementById('har-content').classList.add('hidden');
-    document.getElementById('file-info').textContent = '';
+    document.getElementById('har-content')!.classList.add('hidden');
+    document.getElementById('file-info')!.textContent = '';
     this.dropZone.show();
   }
 
   // Exports only the entries currently passing the request table's filter,
   // as a standalone .har (JSON) file - the full HAR structure is kept, but
   // log.entries is reduced to the filtered subset.
-  exportData() {
+  private exportData(): void {
     if (!this.currentHarData) {
       this.showErrorMessage('No data to export');
       return;
     }
 
     const visibleIds = new Set(this.requestTable.getVisibleEntries().map(entry => entry.id));
-    const filteredHarData = {
+    const filteredHarData: HarData = {
       ...this.currentHarData,
       log: {
         ...this.currentHarData.log,
-        entries: this.currentHarData.log.entries.filter((_, index) => visibleIds.has(index))
+        entries: (this.currentHarData.log.entries || []).filter((_, index) => visibleIds.has(index))
       }
     };
 
@@ -145,19 +155,19 @@ class HarViewerApp {
     linkElement.click();
   }
 
-  showErrorMessage(message) {
+  private showErrorMessage(message: string): void {
     let errorDiv = document.getElementById('error-message');
     if (!errorDiv) {
       errorDiv = document.createElement('div');
       errorDiv.id = 'error-message';
-      document.getElementById('app').prepend(errorDiv);
+      document.getElementById('app')!.prepend(errorDiv);
     }
     errorDiv.textContent = message;
     errorDiv.classList.add('visible');
 
-    clearTimeout(this._errorTimeout);
-    this._errorTimeout = setTimeout(() => {
-      errorDiv.classList.remove('visible');
+    clearTimeout(this.errorTimeout);
+    this.errorTimeout = setTimeout(() => {
+      errorDiv!.classList.remove('visible');
     }, 5000);
   }
 }

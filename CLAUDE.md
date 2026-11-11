@@ -25,39 +25,50 @@ dialog); the file is read and parsed entirely in the browser with
 `FileReader`/`JSON.parse` — **it is never uploaded to a server**. The dev
 server and production build only ever serve static files.
 
+The app is written in **TypeScript** (strict mode) and served as native ES
+modules by Vite, which transpiles `.ts` on the fly — no separate build step
+is needed for development. See [TypeScript](#typescript) below.
+
 ## Key Components
 
 ### Utilities (`src/utils/`)
-1. **HarParser** (`harParser.js`) - Parses HAR JSON into structured entries;
+1. **HarParser** (`harParser.ts`) - Parses HAR JSON into structured entries;
    also derives `host`, `path`, `protocol`, `contentType` and
    `relativeStartMs` (time since the first request in the archive) per
    entry, and provides `formatBytes` / `formatTime` / `formatRelativeTime`.
-2. **filterParser** (`filterParser.js`) - Parses and applies the request
+2. **filterParser** (`filterParser.ts`) - Parses and applies the request
    table's filter query syntax (`parseFilterQuery`, `filterEntries`).
-3. **httpFormatter** (`httpFormatter.js`) - Builds raw wire-format HTTP text
+3. **httpFormatter** (`httpFormatter.ts`) - Builds raw wire-format HTTP text
    (`buildRawRequest`, `buildRawResponse`) and lightweight JSON/HTML syntax
    highlighting (`highlightSyntax`) for the detail panel's Raw/Syntax tabs.
-4. **domUtils** (`domUtils.js`) - Shared `escapeHtml`, `truncateUrl`,
+4. **domUtils** (`domUtils.ts`) - Shared `escapeHtml`, `truncateUrl`,
    `truncateText` helpers.
 
+### Types (`src/types/`)
+- **har.ts** - Shared TypeScript interfaces for the raw HAR 1.2 JSON shape
+  (`HarData`, `HarEntryRaw`, `HarRequestRaw`, `HarResponseRaw`, ...) and the
+  structured shape `HarParser` produces (`ParsedHar`, `ParsedEntry`,
+  `ParsedRequest`, `ParsedResponse`, ...). Import `ParsedEntry` whenever you
+  need the type of an entry flowing through the table/filter/detail panel.
+
 ### Components (`src/components/`)
-1. **FileDropZone** (`FileDropZone.js`) - The landing screen: drag-and-drop
+1. **FileDropZone** (`FileDropZone.ts`) - The landing screen: drag-and-drop
    target plus a "Select File…" button (native file picker). Validates the
    file looks like a `.har`/JSON file, then hands the raw `File` object back
    via `onFileSelected`.
-2. **RequestTable** (`RequestTable.js`) - Left-pane filterable table. Owns
+2. **RequestTable** (`RequestTable.ts`) - Left-pane filterable table. Owns
    the filter input, debounces keystrokes 250ms before re-filtering via
    `filterParser`, and renders rows with columns: index, response code,
    protocol, host, path, body size, content-type, duration, and relative
    start time. Emits `onSelect(entry)` when a row is clicked. Exposes
    `getVisibleEntries()` so other components (e.g. the Export button in
-   `index.js`) can get the currently filtered-in entries.
-3. **DetailPanel** (`DetailPanel.js`) - Right-pane detail view. Splits into
+   `index.ts`) can get the currently filtered-in entries.
+3. **DetailPanel** (`DetailPanel.ts`) - Right-pane detail view. Splits into
    a Request side and a Response side, each with independent Headers / Raw
    / Cookies / Syntax sub-tabs (state remembered per side across selections).
 
 ### Orchestration
-- **Main Application** (`src/index.js`) - Reads the file locally, calls
+- **Main Application** (`src/index.ts`) - Reads the file locally, calls
   `HarParser.parse`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`.
   Also implements the header's **Export** button (`exportData`), which
   downloads the entries currently passing the request table's filter (via
@@ -81,16 +92,18 @@ Follow these patterns when adding new features:
 
 1. **New Utilities**: Place in `src/utils/` with clear, single-responsibility functions
 2. **UI Components**: Place in `src/components/` as modular, reusable elements
-3. **Styles**: Add to `src/styles/main.css` (all styling, including the
+3. **Shared Types**: Add/extend interfaces in `src/types/har.ts` rather than
+   inlining object shapes; import them with `import type { ... }`
+4. **Styles**: Add to `src/styles/main.css` (all styling, including the
    drop screen, lives in this one file; split it out only if it grows
    unwieldy)
-4. **Tests**: Place in `tests/` directory mirroring the `src/` structure
+5. **Tests**: Place in `tests/` directory mirroring the `src/` structure, as `.test.ts` files
 
 ## Architecture Notes
 
 ### Data Flow
 1. User drags a file onto `FileDropZone` or picks one via "Select File…"
-2. `index.js` reads the file locally with `FileReader` and parses the JSON
+2. `index.ts` reads the file locally with `FileReader` and parses the JSON
 3. `HarParser.parse` turns the raw HAR JSON into structured entries
 4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
    starts in its empty state
@@ -103,7 +116,7 @@ libraries are used, and no network requests are made — the project is a
 pure static site (`npm run build` → static `dist/`, servable by any static
 file server).
 
-### Filter Query Syntax (`filterParser.js`)
+### Filter Query Syntax (`filterParser.ts`)
 Parsed by a tokenizer + recursive-descent parser into an AST
 (`parseFilterQuery` returns the AST; `filterEntries` evaluates it per entry).
 Clauses with no explicit operator between them are ANDed.
@@ -147,41 +160,63 @@ panes stack vertically under 900px width.
 
 ### Adding a Column to the Request Table
 1. Add a `<th>` in `index.html`'s `#requests-table thead`
-2. Update `RequestTable.buildRow` in `RequestTable.js` to add the matching `<td>`
-3. Ensure the value is available on the parsed entry (extend `HarParser` if not)
+2. Update `RequestTable.buildRow` in `RequestTable.ts` to add the matching `<td>`
+3. Ensure the value is available on the parsed entry (extend `HarParser`
+   and the `ParsedEntry` interface in `src/types/har.ts` if not)
 
 ### Adding a Filterable Field
-1. Add the field to `FIELD_ALIASES` in `filterParser.js` (and to
-   `NUMERIC_FIELDS` if it's a number)
+1. Add the field to `FIELD_ALIASES` in `filterParser.ts` (and to
+   `NUMERIC_FIELDS`/the `FieldName` union type if it's a number)
 2. Add a case for it in `getFieldValue` in the same file
 3. Update the hint text in `index.html`'s `#filter-hint`
 
 ### Adding a Header/Cookie-Style Filter Prefix
-1. Add the prefix to `HEADER_COOKIE_ALIASES` in `filterParser.js`, mapping
+1. Add the prefix to `HEADER_COOKIE_ALIASES` in `filterParser.ts`, mapping
    it to a `side` key
 2. Add a case for that `side` in `getHeaderCookieList` in the same file
 3. Update the hint text in `index.html`'s `#filter-hint`
 
 ### Adding a Sub-Tab to the Detail Panel
-1. Add the tab to `SUB_TABS` in `DetailPanel.js`
+1. Add the tab to `SUB_TABS` in `DetailPanel.ts` (and to the `SubTabKey` type)
 2. Add a `case` for it in `DetailPanel.renderSidePanel`
 3. Implement a `renderXxx(...)` method following the existing
    `renderHeaders` / `renderRaw` / `renderCookies` / `renderSyntax` pattern
 
 ### Extending HAR Parsing
-1. Add new fields/methods to `HarParser.js`
+1. Add new fields/methods to `HarParser.ts`, updating the raw/parsed
+   interfaces in `src/types/har.ts` to match
 2. If the data is used by the filter engine, also wire it into
-   `filterParser.js`'s `getFieldValue`/`FIELD_ALIASES`
+   `filterParser.ts`'s `getFieldValue`/`FIELD_ALIASES`
+
+## TypeScript
+
+The project is written in strict-mode TypeScript (`tsconfig.json`: `strict`
+and `noUncheckedIndexedAccess`). A few things to keep in mind:
+- Vite serves/transpiles `.ts` files natively (no type-checking at dev-server
+  time); run `npm run typecheck` (or `npm run build`, which runs it first)
+  to actually type-check.
+- Jest runs tests through Babel (`@babel/preset-typescript`), which strips
+  types without checking them - `npm run typecheck` is the source of truth
+  for type errors, `npm test` only proves the code runs correctly.
+- Source imports keep an explicit `.js` extension (e.g.
+  `import { HarParser } from '../utils/harParser.js'`) even though the
+  files are `.ts` - this is required for native ESM resolution in the
+  browser/Vite. `jest.config.js` maps those back to the `.ts` source via
+  `moduleNameMapper`.
+- Shared data shapes live in `src/types/har.ts`; prefer extending those
+  interfaces over inlining object types or using `any`.
 
 ## Testing
 
 Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
-- `tests/harParser.test.js` - parsing, formatting, derived fields
-- `tests/filterParser.test.js` - filter query parsing and matching
+- `tests/harParser.test.ts` - parsing, formatting, derived fields
+- `tests/filterParser.test.ts` - filter query parsing and matching
 
-Jest needs `jest-environment-jsdom` and `@babel/preset-env` (see
-`babel.config.cjs`) to transform ES modules for the test run; the app
-itself ships as native ES modules via Vite, untouched by Babel.
+Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
+`@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES
+modules for the test run; the app itself ships as native ES modules/TS via
+Vite, untouched by Babel. Run `npm run typecheck` separately (or via
+`npm run build`) for actual type-checking - see [TypeScript](#typescript).
 
 Future enhancements could include:
 1. Component/integration tests for `RequestTable` and `DetailPanel`

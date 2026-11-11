@@ -1,12 +1,13 @@
 // Builds raw HTTP-wire-format text and lightweight syntax highlighting for
 // request/response bodies, used by the detail panes' "Raw" and "Syntax" tabs.
 import { escapeHtml } from './domUtils.js';
+import type { HarHeader, ParsedEntry, ParsedRequest } from '../types/har.js';
 
-function headerLines(headers) {
+function headerLines(headers: HarHeader[] | undefined): string {
   return (headers || []).map(h => `${h.name}: ${h.value}`).join('\r\n');
 }
 
-function requestLine(request) {
+function requestLine(request: ParsedRequest): string {
   let target = request.url || '/';
   try {
     const urlObj = new URL(request.url);
@@ -17,7 +18,7 @@ function requestLine(request) {
   return `${request.method} ${target} ${request.httpVersion || 'HTTP/1.1'}`;
 }
 
-function requestBodyText(request) {
+function requestBodyText(request: ParsedRequest): string {
   if (!request.postData) return '';
   if (request.postData.text) return request.postData.text;
   if (request.postData.params && request.postData.params.length) {
@@ -29,7 +30,7 @@ function requestBodyText(request) {
 }
 
 // Builds the raw request exactly as it would appear on the wire.
-export function buildRawRequest(entry) {
+export function buildRawRequest(entry: ParsedEntry): string {
   const { request } = entry;
   const lines = [requestLine(request)];
   const headers = headerLines(request.headers);
@@ -41,7 +42,7 @@ export function buildRawRequest(entry) {
 }
 
 // Builds the raw response exactly as it would appear on the wire.
-export function buildRawResponse(entry) {
+export function buildRawResponse(entry: ParsedEntry): string {
   const { response } = entry;
   const statusLine = `${response.httpVersion || 'HTTP/1.1'} ${response.status} ${response.statusText || ''}`.trim();
   const lines = [statusLine];
@@ -56,7 +57,7 @@ export function buildRawResponse(entry) {
 
 // Very small, dependency-free syntax highlighter good enough for JSON/XML/
 // HTML/plain bodies. Returns safe HTML (input is escaped first).
-export function highlightSyntax(text, mimeType) {
+export function highlightSyntax(text: string, mimeType: string): string {
   if (!text) return '<span class="syntax-empty">No body</span>';
 
   const mime = (mimeType || '').toLowerCase();
@@ -65,7 +66,7 @@ export function highlightSyntax(text, mimeType) {
   return `<span class="syntax-plain">${escapeHtml(text)}</span>`;
 }
 
-function highlightJson(text) {
+function highlightJson(text: string): string {
   let pretty = text;
   try {
     pretty = JSON.stringify(JSON.parse(text), null, 2);
@@ -91,7 +92,7 @@ function highlightJson(text) {
   );
 }
 
-function highlightMarkup(text) {
+function highlightMarkup(text: string): string {
   const escaped = escapeHtml(text);
   // Highlight tags (&lt;/?tag ... &gt;) and attribute names.
   return escaped.replace(

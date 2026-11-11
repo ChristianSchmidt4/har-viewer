@@ -1,6 +1,19 @@
 // Utility class for parsing HAR files
+import type {
+  HarData,
+  HarEntryRaw,
+  HarRequestRaw,
+  HarResponseRaw,
+  HarContentRaw,
+  ParsedEntry,
+  ParsedRequest,
+  ParsedResponse,
+  ParsedContent,
+  ParsedHar
+} from '../types/har.js';
+
 export class HarParser {
-  parse(harData) {
+  parse(harData: HarData): ParsedHar {
     if (!harData || !harData.log) {
       throw new Error('Invalid HAR format: Missing log object');
     }
@@ -19,7 +32,7 @@ export class HarParser {
     };
   }
 
-  parseEntries(entries) {
+  parseEntries(entries: HarEntryRaw[]): ParsedEntry[] {
     return entries.map((entry, index) => {
       const request = this.parseRequest(entry.request || {});
       const response = this.parseResponse(entry.response || {});
@@ -49,7 +62,7 @@ export class HarParser {
 
   // Computes relativeStartMs on every entry relative to the earliest entry
   // in the archive (i.e. "time since the first request started").
-  applyRelativeTimings(entries) {
+  applyRelativeTimings(entries: ParsedEntry[]): void {
     if (!entries.length) return;
     const validTimes = entries
       .map(e => e.startedTimeMs)
@@ -64,13 +77,13 @@ export class HarParser {
     });
   }
 
-  toTimestamp(dateString) {
+  toTimestamp(dateString: string | undefined): number {
     if (!dateString) return NaN;
     const parsed = Date.parse(dateString);
     return Number.isNaN(parsed) ? NaN : parsed;
   }
 
-  parseUrl(url) {
+  parseUrl(url: string): { host: string; path: string } {
     try {
       const urlObj = new URL(url);
       return {
@@ -82,7 +95,7 @@ export class HarParser {
     }
   }
 
-  parseRequest(request) {
+  parseRequest(request: HarRequestRaw): ParsedRequest {
     return {
       method: request.method || '',
       url: request.url || '',
@@ -91,13 +104,13 @@ export class HarParser {
       headers: request.headers || [],
       queryString: request.queryString || [],
       postData: request.postData || null,
-      headersSize: request.headersSize || -1,
-      bodySize: request.bodySize || -1,
+      headersSize: request.headersSize ?? -1,
+      bodySize: request.bodySize ?? -1,
       comment: request.comment || ''
     };
   }
 
-  parseResponse(response) {
+  parseResponse(response: HarResponseRaw): ParsedResponse {
     return {
       status: response.status || 0,
       statusText: response.statusText || '',
@@ -106,13 +119,13 @@ export class HarParser {
       headers: response.headers || [],
       content: this.parseContent(response.content || {}),
       redirectURL: response.redirectURL || '',
-      headersSize: response.headersSize || -1,
-      bodySize: response.bodySize || -1,
+      headersSize: response.headersSize ?? -1,
+      bodySize: response.bodySize ?? -1,
       comment: response.comment || ''
     };
   }
 
-  parseContent(content) {
+  parseContent(content: HarContentRaw): ParsedContent {
     return {
       size: content.size || 0,
       compression: content.compression || 0,
@@ -124,7 +137,7 @@ export class HarParser {
   }
 
   // Format time in milliseconds to a human-readable format
-  formatTime(timeMs) {
+  formatTime(timeMs: number): string {
     if (!Number.isFinite(timeMs)) return 'N/A';
     if (timeMs < 1) return `${Math.round(timeMs * 1000)}μs`;
     if (timeMs < 1000) return `${Math.round(timeMs)}ms`;
@@ -132,13 +145,13 @@ export class HarParser {
   }
 
   // Format a relative start offset (always non-negative, prefixed with "+")
-  formatRelativeTime(timeMs) {
+  formatRelativeTime(timeMs: number): string {
     if (!Number.isFinite(timeMs) || timeMs <= 0) return '+0ms';
     return `+${this.formatTime(timeMs)}`;
   }
 
   // Format bytes to a human-readable format
-  formatBytes(bytes) {
+  formatBytes(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes < 0) return 'N/A';
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -148,7 +161,7 @@ export class HarParser {
   }
 
   // Get a short content-type label from a MIME type
-  getContentType(mimeType) {
+  getContentType(mimeType: string): string {
     if (!mimeType) return 'other';
     const mime = mimeType.toLowerCase();
     if (mime.includes('text/html')) return 'html';

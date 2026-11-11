@@ -2,7 +2,7 @@
 import { HarParser } from '../src/utils/harParser.js';
 
 describe('HarParser', () => {
-  let parser;
+  let parser: HarParser;
 
   beforeEach(() => {
     parser = new HarParser();
@@ -26,7 +26,7 @@ describe('HarParser', () => {
     });
 
     it('should throw error for invalid HAR format', () => {
-      const invalidHarData = {};
+      const invalidHarData = {} as unknown as Parameters<HarParser['parse']>[0];
 
       expect(() => parser.parse(invalidHarData)).toThrow('Invalid HAR format: Missing log object');
     });
@@ -55,11 +55,11 @@ describe('HarParser', () => {
 
       const result = parser.parse(mockHarData);
 
-      expect(result.entries[0].host).toBe('example.com');
-      expect(result.entries[0].path).toBe('/foo?x=1');
-      expect(result.entries[0].protocol).toBe('HTTP/1.1');
-      expect(result.entries[0].relativeStartMs).toBe(0);
-      expect(result.entries[1].relativeStartMs).toBe(1000);
+      expect(result.entries[0]!.host).toBe('example.com');
+      expect(result.entries[0]!.path).toBe('/foo?x=1');
+      expect(result.entries[0]!.protocol).toBe('HTTP/1.1');
+      expect(result.entries[0]!.relativeStartMs).toBe(0);
+      expect(result.entries[1]!.relativeStartMs).toBe(1000);
     });
   });
 

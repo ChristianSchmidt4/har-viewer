@@ -2,24 +2,37 @@
 // zone plus a "Browse" button that opens the native file picker. All file
 // reading happens locally via the File/FileReader APIs - nothing is ever
 // uploaded to a server.
+
+export interface FileDropZoneOptions {
+  onFileSelected: (file: File) => void;
+  onError: (message: string) => void;
+}
+
 export class FileDropZone {
-  constructor({ onFileSelected, onError }) {
+  private onFileSelected: (file: File) => void;
+  private onError: (message: string) => void;
+  private screenEl: HTMLElement;
+  private dropPanelEl: HTMLElement;
+  private fileInputEl: HTMLInputElement;
+  private browseBtnEl: HTMLElement;
+
+  constructor({ onFileSelected, onError }: FileDropZoneOptions) {
     this.onFileSelected = onFileSelected;
     this.onError = onError;
 
-    this.screenEl = document.getElementById('drop-screen');
-    this.dropPanelEl = document.getElementById('drop-panel');
-    this.fileInputEl = document.getElementById('har-file-input');
-    this.browseBtnEl = document.getElementById('browse-btn');
+    this.screenEl = document.getElementById('drop-screen')!;
+    this.dropPanelEl = document.getElementById('drop-panel')!;
+    this.fileInputEl = document.getElementById('har-file-input') as HTMLInputElement;
+    this.browseBtnEl = document.getElementById('browse-btn')!;
 
     this.bindEvents();
   }
 
-  bindEvents() {
+  private bindEvents(): void {
     // Browse button opens the hidden native file input.
     this.browseBtnEl.addEventListener('click', () => this.fileInputEl.click());
     this.fileInputEl.addEventListener('change', (event) => {
-      const file = event.target.files[0];
+      const file = (event.target as HTMLInputElement).files?.[0];
       if (file) this.handleFile(file);
       // Reset so selecting the same file again still fires "change".
       this.fileInputEl.value = '';
@@ -39,7 +52,8 @@ export class FileDropZone {
       this.screenEl.addEventListener(eventName, (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (eventName === 'dragleave' && event.target !== this.screenEl && this.screenEl.contains(event.relatedTarget)) {
+        const dragEvent = event as DragEvent;
+        if (eventName === 'dragleave' && event.target !== this.screenEl && this.screenEl.contains(dragEvent.relatedTarget as Node)) {
           return;
         }
         this.dropPanelEl.classList.remove('drag-active');
@@ -47,12 +61,12 @@ export class FileDropZone {
     });
 
     this.screenEl.addEventListener('drop', (event) => {
-      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      const file = (event as DragEvent).dataTransfer?.files?.[0];
       if (file) this.handleFile(file);
     });
   }
 
-  handleFile(file) {
+  private handleFile(file: File): void {
     const isHarByName = /\.har$/i.test(file.name);
     const isGzipByName = /\.gz$/i.test(file.name);
     const isJsonByType = file.type === 'application/json' || file.type === '';
@@ -64,11 +78,11 @@ export class FileDropZone {
     this.onFileSelected(file);
   }
 
-  show() {
+  show(): void {
     this.screenEl.classList.remove('hidden');
   }
 
-  hide() {
+  hide(): void {
     this.screenEl.classList.add('hidden');
   }
 }
