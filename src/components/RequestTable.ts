@@ -16,22 +16,30 @@ import type { ParsedEntry } from '../types/har.js';
 import type { CustomColumn } from '../utils/customColumns.js';
 import type { HighlightRule } from '../utils/highlightRules.js';
 
+type WidthUnit = "px" | "em" | "rem" | "ch"
 interface Column {
   key: string;
   label: string;
+  // Width in ch; the header cell owns it (table-layout: fixed), so body
+  // content never changes column widths.
+  // if given, then the column is resizable manually
+  width?: number;
 }
 
 const COLUMNS: Column[] = [
-  { key: 'index', label: '#' },
-  { key: 'status', label: 'Code' },
-  { key: 'protocol', label: 'Protocol' },
-  { key: 'host', label: 'Host' },
-  { key: 'path', label: 'Path' },
-  { key: 'size', label: 'Body Size' },
-  { key: 'contentType', label: 'Content-Type' },
-  { key: 'duration', label: 'Duration' },
-  { key: 'startOffset', label: 'Start' }
+  {key: 'index', label: '   #'},
+  {key: 'status', label: 'Code'},
+  {key: 'protocol', label: 'Protocol'},
+  {key: 'host', label: 'Host', width: 10},
+  {key: 'path', label: 'Path', width: 20},
+  {key: 'size', label: 'Body Size'},
+  {key: 'contentType', label: 'Type'},
+  {key: 'duration', label: 'Duration'},
+  {key: 'startOffset', label: 'Start    '}
 ];
+
+
+const MIN_COLUMN_WIDTH_PX = 48;
 
 // Only rows inside the viewport (plus this many rows above/below) are in the
 // DOM; the rest is represented by spacer rows so scrolling stays accurate.
@@ -64,6 +72,8 @@ export class RequestTable {
 
   private customColumns: CustomColumn[];
   private highlightRules: HighlightRule[];
+  // Widths (px) of resizable columns, keyed by column key or `custom:<id>`.
+  private columnWidths: Map<string, number>;
 
   private rowHeight: number;
   private renderedRange: WindowRange | null;
@@ -82,6 +92,7 @@ export class RequestTable {
     this.lastSelectedEntryId = null;
     this.customColumns = [];
     this.highlightRules = [];
+    this.columnWidths = new Map();
     this.rowHeight = DEFAULT_ROW_HEIGHT_PX;
     this.renderedRange = null;
 
@@ -138,6 +149,32 @@ export class RequestTable {
         this.onCustomColumnRemove(columnId);
       }
     });
+
+    // Drag the right edge of a resizable header cell to change its width.
+    this.theadEl.addEventListener('mousedown', (event) => {
+      const handle = (event.target as HTMLElement).closest<HTMLElement>('.col-resizer');
+      if (!handle) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const key = handle.dataset.columnKey!;
+      const th = handle.closest('th')!;
+      const startX = event.clientX;
+      const startWidth = th.getBoundingClientRect().width;
+
+      const onMove = (moveEvent: MouseEvent) => {
+        const width = Math.max(MIN_COLUMN_WIDTH_PX, Math.round(startWidth + moveEvent.clientX - startX));
+        this.columnWidths.set(key, width);
+        th.style.width = `${width}px`;
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.classList.remove('resizing-horizontal');
+      };
+      document.body.classList.add('resizing-horizontal');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   }
 
   setEntries(entries: ParsedEntry[]): void {
@@ -178,13 +215,24 @@ export class RequestTable {
   }
 
   private renderHeader(): void {
-    const customThs = this.customColumns.map(col =>
-      `<th class="col-custom">${escapeHtml(col.label)}<button class="col-custom-remove" data-column-id="${escapeHtml(col.id)}" title="Remove column">&times;</button></th>`
-    ).join('');
+    const widthStyle = (key: string, defaultWidth: number, unit: WidthUnit): string =>
+      `style="box-sizing: content-box; width:${this.columnWidths.get(key) ?? defaultWidth}${unit}"`;
+    const builtInThs = COLUMNS.map(c => {
+      const resizer = c.width
+        ? `<span class="col-resizer" data-column-key="${c.key}"></span>`
+        : '';
+      return `<th ${widthStyle(c.key, c.width || c.label.length, 'ch')}>${c.label}${resizer}</th>`;
+    }).join('');
+    const customThs = this.customColumns.map(col => {
+      const key = `custom:${col.id}`;
+      return `<th class="col-custom" ${widthStyle(key, col.label.length + 3, "ch")}><span class="col-label">${escapeHtml(col.label)}</span><button class="col-custom-remove" data-column-id="${escapeHtml(col.id)}" title="Remove column">&times;</button><span class="col-resizer" data-column-key="${escapeHtml(key)}"></span></th>`;
+    }).join('');
+    // Filler absorbs spare width so the fixed-width columns keep their size.
     this.theadEl.innerHTML = `
       <tr>
-        ${COLUMNS.map(c => `<th>${c.label}</th>`).join('')}
+        ${builtInThs}
         ${customThs}
+        <th class="col-fill" aria-hidden="true"></th>
       </tr>
     `;
   }
@@ -214,7 +262,7 @@ export class RequestTable {
     }
     this.renderedRange = range;
 
-    const colSpan = COLUMNS.length + this.customColumns.length;
+    const colSpan = COLUMNS.length + this.customColumns.length + 1;
     const nodes: HTMLElement[] = [];
     if (range.start > 0) {
       nodes.push(this.buildSpacer(range.start * this.rowHeight, colSpan));
@@ -296,6 +344,7 @@ export class RequestTable {
       <td class="col-duration">${this.harParser.formatTime(entry.time)}</td>
       <td class="col-start">${this.harParser.formatRelativeTime(entry.relativeStartMs)}</td>
       ${customCells}
+      <td class="col-fill" aria-hidden="true"></td>
     `;
     return row;
   }

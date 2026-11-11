@@ -92,7 +92,12 @@ is needed for development. See [TypeScript](#typescript) below.
    `filterParser`, and renders rows with columns: index, response code,
    protocol, host, path, body size (request + response body bytes, with
    unknown `-1` sizes counted as 0; `N/A` only if both are unknown),
-   content-type, duration, and relative start time. Supports multi-select: plain click selects one row
+   content-type, duration, and relative start time. Column widths are fixed
+   (`table-layout: fixed`) and set on the header cells (`COLUMNS[].width`,
+   `CUSTOM_COLUMN_WIDTH_PX`), so they don't change between pages; the
+   Path and custom columns have a `.col-resizer` drag handle on their right
+   edge (widths kept in `columnWidths`), and a trailing `.col-fill` column
+   absorbs spare width. Supports multi-select: plain click selects one row
    (`onSelect(entry)`), Ctrl/Cmd-click toggles a row in/out of the selection,
    and Shift-click selects the range from the last-touched row; 0 or 1
    selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
