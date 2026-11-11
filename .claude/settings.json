@@ -1,7 +1,7 @@
 {
   "projectType": "web",
-  "framework": "vanilla-js",
-  "language": "javascript",
+  "framework": "vite",
+  "language": "typescript",
   "features": [
     "client-side-parsing",
     "http-archive-viewer",
