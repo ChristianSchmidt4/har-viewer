@@ -35,7 +35,8 @@ is needed for development. See [TypeScript](#typescript) below.
 1. **HarParser** (`harParser.ts`) - Parses HAR JSON into structured entries;
    also derives `host`, `path`, `protocol`, `contentType` and
    `relativeStartMs` (time since the first request in the archive) per
-   entry, and provides `formatBytes` / `formatTime` / `formatRelativeTime`.
+   entry, and provides `formatBytes` / `formatTime` / `formatRelativeTime` /
+   `formatDateTime`.
 2. **filterParser** (`filterParser.ts`) - Parses and applies the request
    table's filter query syntax (`parseFilterQuery`, `filterEntries`).
 3. **httpFormatter** (`httpFormatter.ts`) - Builds raw wire-format HTTP text
@@ -75,7 +76,10 @@ is needed for development. See [TypeScript](#typescript) below.
   `RequestTable.getVisibleEntries`) as a standalone `.har` (JSON) file,
   named `<original-name>.filtered.har`. The button's `title` tooltip states
   what/format is exported; keep it in sync if the export format or scope
-  changes.
+  changes. After a file loads, `displayTimeRange` fills `#time-range`
+  (next to `#file-info`, before the header buttons) with the first
+  request's start time and the archive's total duration (first request's
+  start to last request's end), via `HarParser.formatDateTime`/`formatTime`.
 
 ## Development Workflow with Claude Code
 

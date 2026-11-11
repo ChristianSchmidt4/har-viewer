@@ -3,7 +3,7 @@ import { FileDropZone } from './components/FileDropZone.js';
 import { RequestTable } from './components/RequestTable.js';
 import { DetailPanel } from './components/DetailPanel.js';
 import { makeResizer } from './utils/resizer.js';
-import type { HarData } from './types/har.js';
+import type { HarData, ParsedEntry } from './types/har.js';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
@@ -68,6 +68,7 @@ class HarViewerApp {
 
       this.requestTable.setEntries(parsedData.entries);
       this.detailPanel.showEmptyState();
+      this.displayTimeRange(parsedData.entries);
     } catch (error) {
       console.error('Error processing HAR file:', error);
       const message = error instanceof Error ? error.message : '';
@@ -122,7 +123,28 @@ class HarViewerApp {
     this.currentFileName = null;
     document.getElementById('har-content')!.classList.add('hidden');
     document.getElementById('file-info')!.textContent = '';
+    document.getElementById('time-range')!.textContent = '';
     this.dropZone.show();
+  }
+
+  // Shows the first request's start time and the total duration of the
+  // archive (from the first request's start to the last request's end).
+  private displayTimeRange(entries: ParsedEntry[]): void {
+    const timeRangeDiv = document.getElementById('time-range')!;
+    if (!entries.length) {
+      timeRangeDiv.textContent = '';
+      return;
+    }
+
+    const first = entries[0]!;
+    const last = entries[entries.length - 1]!;
+    const totalDurationMs = Number.isFinite(first.startedTimeMs) && Number.isFinite(last.startedTimeMs)
+      ? (last.startedTimeMs + last.time) - first.startedTimeMs
+      : NaN;
+
+    timeRangeDiv.textContent =
+      `Start: ${this.harParser.formatDateTime(first.startedTimeMs)} · `
+      + `Duration: ${this.harParser.formatTime(totalDurationMs)}`;
   }
 
   // Exports only the entries currently passing the request table's filter,

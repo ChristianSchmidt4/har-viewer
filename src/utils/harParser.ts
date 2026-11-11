@@ -150,6 +150,13 @@ export class HarParser {
     return `+${this.formatTime(timeMs)}`;
   }
 
+  // Format an absolute timestamp (ms since epoch) to a human-readable
+  // local date/time string.
+  formatDateTime(timeMs: number): string {
+    if (!Number.isFinite(timeMs)) return 'N/A';
+    return new Date(timeMs).toLocaleString();
+  }
+
   // Format bytes to a human-readable format
   formatBytes(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes < 0) return 'N/A';
