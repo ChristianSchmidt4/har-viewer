@@ -54,9 +54,11 @@ export class FileDropZone {
 
   handleFile(file) {
     const isHarByName = /\.har$/i.test(file.name);
+    const isGzipByName = /\.gz$/i.test(file.name);
     const isJsonByType = file.type === 'application/json' || file.type === '';
-    if (!isHarByName && !isJsonByType) {
-      this.onError('Please select a .har file (JSON format).');
+    const isGzipByType = file.type === 'application/gzip' || file.type === 'application/x-gzip';
+    if (!isHarByName && !isGzipByName && !isJsonByType && !isGzipByType) {
+      this.onError('Please select a .har file (JSON format), optionally gzip-compressed (.har.gz).');
       return;
     }
     this.onFileSelected(file);

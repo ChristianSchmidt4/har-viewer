@@ -42,7 +42,9 @@ class HarViewerApp {
   }
 
   // Reads the File object locally via FileReader - the file is never sent
-  // to any server, only parsed in-memory in the browser.
+  // to any server, only parsed in-memory in the browser. Transparently
+  // gunzips .har.gz / .gz files via the native DecompressionStream before
+  // parsing the JSON.
   async handleFile(file) {
     try {
       const harData = await this.readFileAsJson(file);
@@ -67,19 +69,30 @@ class HarViewerApp {
     }
   }
 
-  readFileAsJson(file) {
+  async readFileAsJson(file) {
+    const text = /\.gz$/i.test(file.name)
+      ? await this.readGzipFileAsText(file)
+      : await this.readFileAsText(file);
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error('Invalid JSON format');
+    }
+  }
+
+  readFileAsText(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          resolve(JSON.parse(event.target.result));
-        } catch (error) {
-          reject(new Error('Invalid JSON format'));
-        }
-      };
+      reader.onload = (event) => resolve(event.target.result);
       reader.onerror = () => reject(new Error('Error reading file'));
       reader.readAsText(file);
     });
+  }
+
+  async readGzipFileAsText(file) {
+    const decompressedStream = file.stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(decompressedStream).text();
   }
 
   displayFileInfo(fileName, fileSize) {
