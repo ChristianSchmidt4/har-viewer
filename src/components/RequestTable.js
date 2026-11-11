@@ -1,0 +1,131 @@
+// Left-hand panel: a filterable table of HTTP requests.
+// Columns: index, response code, http protocol, host, path, body size,
+// content-type, overall request duration, start time relative to the first
+// request in the archive.
+import { HarParser } from '../utils/harParser.js';
+import { filterEntries } from '../utils/filterParser.js';
+import { escapeHtml, truncateText } from '../utils/domUtils.js';
+
+const COLUMNS = [
+  { key: 'index', label: '#' },
+  { key: 'status', label: 'Code' },
+  { key: 'protocol', label: 'Protocol' },
+  { key: 'host', label: 'Host' },
+  { key: 'path', label: 'Path' },
+  { key: 'size', label: 'Body Size' },
+  { key: 'contentType', label: 'Content-Type' },
+  { key: 'duration', label: 'Duration' },
+  { key: 'startOffset', label: 'Start' }
+];
+
+export class RequestTable {
+  constructor({ onSelect }) {
+    this.onSelect = onSelect;
+    this.harParser = new HarParser();
+
+    this.allEntries = [];
+    this.visibleEntries = [];
+    this.selectedEntryId = null;
+
+    this.filterInputEl = document.getElementById('request-filter');
+    this.filterHintEl = document.getElementById('filter-hint');
+    this.tableBodyEl = document.getElementById('requests-table-body');
+    this.resultCountEl = document.getElementById('result-count');
+
+    this.bindEvents();
+  }
+
+  bindEvents() {
+    this.filterInputEl.addEventListener('input', () => this.applyFilter());
+
+    // Toggle the filter syntax hint on focus for discoverability.
+    this.filterInputEl.addEventListener('focus', () => {
+      this.filterHintEl.classList.add('visible');
+    });
+    this.filterInputEl.addEventListener('blur', () => {
+      this.filterHintEl.classList.remove('visible');
+    });
+
+    this.tableBodyEl.addEventListener('click', (event) => {
+      const row = event.target.closest('tr[data-entry-id]');
+      if (!row) return;
+      this.selectEntry(parseInt(row.dataset.entryId, 10));
+    });
+  }
+
+  setEntries(entries) {
+    this.allEntries = entries;
+    this.selectedEntryId = null;
+    this.filterInputEl.value = '';
+    this.applyFilter();
+  }
+
+  applyFilter() {
+    const query = this.filterInputEl.value;
+    this.visibleEntries = filterEntries(this.allEntries, query);
+    this.render();
+  }
+
+  render() {
+    this.tableBodyEl.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    this.visibleEntries.forEach(entry => {
+      fragment.appendChild(this.buildRow(entry));
+    });
+
+    this.tableBodyEl.appendChild(fragment);
+    this.updateResultCount();
+  }
+
+  buildRow(entry) {
+    const row = document.createElement('tr');
+    row.dataset.entryId = entry.id;
+    if (entry.id === this.selectedEntryId) {
+      row.classList.add('selected');
+    }
+
+    const status = entry.response.status;
+    const statusClass = status >= 200 && status < 300 ? 'status-success'
+      : status >= 400 ? 'status-error'
+      : status >= 300 && status < 400 ? 'status-redirect'
+      : '';
+
+    const bodySize = entry.response.bodySize >= 0
+      ? this.harParser.formatBytes(entry.response.bodySize)
+      : 'N/A';
+
+    row.innerHTML = `
+      <td class="col-index">${entry.id + 1}</td>
+      <td class="col-status ${statusClass}">${status || '—'}</td>
+      <td class="col-protocol">${escapeHtml(entry.protocol)}</td>
+      <td class="col-host" title="${escapeHtml(entry.host)}">${escapeHtml(entry.host)}</td>
+      <td class="col-path" title="${escapeHtml(entry.path)}">${escapeHtml(truncateText(entry.path, 60))}</td>
+      <td class="col-size">${bodySize}</td>
+      <td class="col-type">${escapeHtml(entry.contentType)}</td>
+      <td class="col-duration">${this.harParser.formatTime(entry.time)}</td>
+      <td class="col-start">${this.harParser.formatRelativeTime(entry.relativeStartMs)}</td>
+    `;
+    return row;
+  }
+
+  selectEntry(entryId) {
+    this.selectedEntryId = entryId;
+    this.tableBodyEl.querySelectorAll('tr[data-entry-id]').forEach(row => {
+      row.classList.toggle('selected', parseInt(row.dataset.entryId, 10) === entryId);
+    });
+
+    const entry = this.allEntries.find(e => e.id === entryId);
+    if (entry) this.onSelect(entry);
+  }
+
+  updateResultCount() {
+    const total = this.allEntries.length;
+    const visible = this.visibleEntries.length;
+    this.resultCountEl.textContent = visible === total
+      ? `${total} requests`
+      : `${visible} / ${total} requests`;
+  }
+}
+
+export { COLUMNS };

@@ -173,10 +173,10 @@ Empty object by default, may contain:
 
 The HAR Viewer application parses these objects to display:
 
-1. Request list with key information (method, URL, status, size, time)
-2. Detailed request/response headers
-3. Response content
-4. Timing breakdown
-5. Performance metrics
+1. A filterable request table with: index, response code, HTTP protocol,
+   host, path, body size, content-type, overall duration, and start time
+   relative to the first request in the archive
+2. A split Request / Response detail view, each with Headers, Raw, Cookies
+   and Syntax (highlighted body) tabs
 
 All parsing is done client-side with no server requirements.

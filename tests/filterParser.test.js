@@ -1,0 +1,70 @@
+import { filterEntries } from '../src/utils/filterParser.js';
+
+function makeEntry(overrides = {}) {
+  return {
+    id: 0,
+    host: 'example.com',
+    path: '/',
+    protocol: 'HTTP/1.1',
+    contentType: 'html',
+    time: 100,
+    request: { method: 'GET', url: 'https://example.com/' },
+    response: { status: 200, bodySize: 500 },
+    ...overrides
+  };
+}
+
+describe('filterEntries', () => {
+  const entries = [
+    makeEntry({ id: 0, host: 'example.com', path: '/', contentType: 'html', time: 100,
+      request: { method: 'GET', url: 'https://example.com/' }, response: { status: 200, bodySize: 500 } }),
+    makeEntry({ id: 1, host: 'api.example.com', path: '/users', contentType: 'json', time: 250,
+      request: { method: 'POST', url: 'https://api.example.com/users' }, response: { status: 404, bodySize: 50 } }),
+    makeEntry({ id: 2, host: 'cdn.example.com', path: '/logo.png', contentType: 'image', time: 30,
+      request: { method: 'GET', url: 'https://cdn.example.com/logo.png' }, response: { status: 200, bodySize: 20480 } })
+  ];
+
+  it('returns all entries for an empty query', () => {
+    expect(filterEntries(entries, '')).toHaveLength(3);
+  });
+
+  it('filters by exact status', () => {
+    const result = filterEntries(entries, 'status:200');
+    expect(result.map(e => e.id)).toEqual([0, 2]);
+  });
+
+  it('filters by method', () => {
+    const result = filterEntries(entries, 'method:POST');
+    expect(result.map(e => e.id)).toEqual([1]);
+  });
+
+  it('filters by host substring', () => {
+    const result = filterEntries(entries, 'host:api');
+    expect(result.map(e => e.id)).toEqual([1]);
+  });
+
+  it('negates a field match', () => {
+    const result = filterEntries(entries, '-type:image');
+    expect(result.map(e => e.id)).toEqual([0, 1]);
+  });
+
+  it('supports numeric comparisons on duration', () => {
+    const result = filterEntries(entries, 'duration:>100');
+    expect(result.map(e => e.id)).toEqual([1]);
+  });
+
+  it('supports numeric comparisons on size with units', () => {
+    const result = filterEntries(entries, 'size:>1kb');
+    expect(result.map(e => e.id)).toEqual([2]);
+  });
+
+  it('combines multiple clauses with AND', () => {
+    const result = filterEntries(entries, 'status:200 type:image');
+    expect(result.map(e => e.id)).toEqual([2]);
+  });
+
+  it('falls back to a plain-text URL match', () => {
+    const result = filterEntries(entries, 'logo');
+    expect(result.map(e => e.id)).toEqual([2]);
+  });
+});

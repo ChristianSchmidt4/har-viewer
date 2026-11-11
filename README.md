@@ -4,24 +4,36 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 
 ## Features
 
-- Client-side HAR file parsing (no server required)
-- Request/response inspection similar to Fiddler
-- Timing analysis and performance metrics
+- Client-side HAR file parsing — **nothing is ever uploaded to a server**
+- Drag-and-drop landing screen, with a "Select File…" button as an
+  alternative to dropping a file
+- Filterable request table (Fiddler-style) with a simple query syntax
+  (`status:200 method:GET host:example.com -type:image duration:>100`)
+- Split Request / Response detail view, each with **Headers**, **Raw**,
+  **Cookies** and **Syntax** (highlighted body) tabs
 - Export functionality
-- Responsive design
+- Responsive design (panels stack on narrow screens)
 
 ## Project Structure
 
 ```
 har_viewer/
 ├── src/
-│   ├── components/     # UI components
-│   ├── utils/          # Utility functions
-│   ├── styles/         # CSS stylesheets
-│   └── index.js        # Main entry point
+│   ├── components/
+│   │   ├── FileDropZone.js   # Drag & drop / file-picker landing screen
+│   │   ├── RequestTable.js   # Filterable request list (left pane)
+│   │   └── DetailPanel.js    # Request/Response detail view (right pane)
+│   ├── utils/
+│   │   ├── harParser.js      # HAR JSON -> structured entries
+│   │   ├── filterParser.js   # Request-table filter query engine
+│   │   ├── httpFormatter.js  # Raw HTTP text + syntax highlighting
+│   │   └── domUtils.js       # Shared DOM/string helpers
+│   ├── styles/
+│   │   └── main.css          # All styling (drop screen + viewer)
+│   └── index.js              # Main entry point / app orchestration
 ├── public/             # Static assets and HTML
-├── docs/               # Documentation
-├── tests/              # Test files
+├── docs/               # Documentation (incl. HAR format reference, sample.har)
+├── tests/              # Test files (mirrors src/ structure)
 ├── .claude/            # Claude Code configuration
 ├── .github/workflows/  # GitHub Actions
 └── dist/               # Build output (generated)

@@ -6,32 +6,80 @@ export class HarParser {
     }
 
     const log = harData.log;
+    const entries = this.parseEntries(log.entries || []);
+    this.applyRelativeTimings(entries);
 
     return {
       version: log.version || '1.2',
       creator: log.creator || {},
       browser: log.browser || {},
       pages: log.pages || [],
-      entries: this.parseEntries(log.entries || []),
+      entries,
       comment: log.comment || ''
     };
   }
 
   parseEntries(entries) {
     return entries.map((entry, index) => {
+      const request = this.parseRequest(entry.request || {});
+      const response = this.parseResponse(entry.response || {});
+      const urlParts = this.parseUrl(request.url);
+
       return {
         id: index,
         startedDateTime: entry.startedDateTime || '',
+        startedTimeMs: this.toTimestamp(entry.startedDateTime),
+        relativeStartMs: 0, // filled in by applyRelativeTimings
         time: entry.time || 0,
-        request: this.parseRequest(entry.request || {}),
-        response: this.parseResponse(entry.response || {}),
+        request,
+        response,
         cache: entry.cache || {},
         timings: entry.timings || {},
         serverIPAddress: entry.serverIPAddress || '',
         connection: entry.connection || '',
-        comment: entry.comment || ''
+        comment: entry.comment || '',
+        // Flattened fields used by the request table / filter engine.
+        protocol: response.httpVersion || request.httpVersion || '',
+        host: urlParts.host,
+        path: urlParts.path,
+        contentType: this.getContentType(response.content.mimeType)
       };
     });
+  }
+
+  // Computes relativeStartMs on every entry relative to the earliest entry
+  // in the archive (i.e. "time since the first request started").
+  applyRelativeTimings(entries) {
+    if (!entries.length) return;
+    const validTimes = entries
+      .map(e => e.startedTimeMs)
+      .filter(t => Number.isFinite(t));
+    if (!validTimes.length) return;
+
+    const firstStart = Math.min(...validTimes);
+    entries.forEach(entry => {
+      entry.relativeStartMs = Number.isFinite(entry.startedTimeMs)
+        ? entry.startedTimeMs - firstStart
+        : 0;
+    });
+  }
+
+  toTimestamp(dateString) {
+    if (!dateString) return NaN;
+    const parsed = Date.parse(dateString);
+    return Number.isNaN(parsed) ? NaN : parsed;
+  }
+
+  parseUrl(url) {
+    try {
+      const urlObj = new URL(url);
+      return {
+        host: urlObj.host,
+        path: urlObj.pathname + urlObj.search
+      };
+    } catch (e) {
+      return { host: '', path: url || '' };
+    }
   }
 
   parseRequest(request) {
@@ -42,7 +90,7 @@ export class HarParser {
       cookies: request.cookies || [],
       headers: request.headers || [],
       queryString: request.queryString || [],
-      postData: request.postData || {},
+      postData: request.postData || null,
       headersSize: request.headersSize || -1,
       bodySize: request.bodySize || -1,
       comment: request.comment || ''
@@ -77,29 +125,40 @@ export class HarParser {
 
   // Format time in milliseconds to a human-readable format
   formatTime(timeMs) {
+    if (!Number.isFinite(timeMs)) return 'N/A';
     if (timeMs < 1) return `${Math.round(timeMs * 1000)}μs`;
     if (timeMs < 1000) return `${Math.round(timeMs)}ms`;
     return `${(timeMs / 1000).toFixed(2)}s`;
   }
 
+  // Format a relative start offset (always non-negative, prefixed with "+")
+  formatRelativeTime(timeMs) {
+    if (!Number.isFinite(timeMs) || timeMs <= 0) return '+0ms';
+    return `+${this.formatTime(timeMs)}`;
+  }
+
   // Format bytes to a human-readable format
   formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
+    if (!Number.isFinite(bytes) || bytes < 0) return 'N/A';
+    if (bytes === 0) return '0 B';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Get content type from MIME type
+  // Get a short content-type label from a MIME type
   getContentType(mimeType) {
     if (!mimeType) return 'other';
-    if (mimeType.includes('text/html')) return 'html';
-    if (mimeType.includes('text/css')) return 'css';
-    if (mimeType.includes('javascript')) return 'js';
-    if (mimeType.includes('image')) return 'image';
-    if (mimeType.includes('json')) return 'json';
-    if (mimeType.includes('xml')) return 'xml';
+    const mime = mimeType.toLowerCase();
+    if (mime.includes('text/html')) return 'html';
+    if (mime.includes('text/css')) return 'css';
+    if (mime.includes('javascript')) return 'js';
+    if (mime.includes('image')) return 'image';
+    if (mime.includes('font')) return 'font';
+    if (mime.includes('json')) return 'json';
+    if (mime.includes('xml')) return 'xml';
+    if (mime.includes('text/plain')) return 'text';
     return 'other';
   }
 }

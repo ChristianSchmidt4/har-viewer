@@ -8,43 +8,72 @@
 </head>
 <body>
     <div id="app">
-        <header>
-            <h1>HAR Viewer</h1>
-            <p>Client-side HTTP Archive viewer inspired by Fiddler</p>
-        </header>
-        <main>
-            <div class="upload-section">
-                <input type="file" id="har-file-input" accept=".har,application/json" />
-                <label for="har-file-input" class="file-upload-btn">Select HAR File</label>
-                <div id="file-info"></div>
+        <!-- Landing screen: shown until a HAR file is loaded. Drag & drop
+             or the Browse button both read the file locally; nothing is
+             ever sent to a server. -->
+        <div id="drop-screen">
+            <div id="drop-panel">
+                <div class="drop-icon">⇩</div>
+                <h1>HAR Viewer</h1>
+                <p class="drop-subtitle">Drop a .har file here</p>
+                <p class="drop-or">or</p>
+                <button id="browse-btn" type="button">Select File…</button>
+                <input type="file" id="har-file-input" accept=".har,application/json" hidden />
+                <p class="drop-privacy-note">Processed entirely in your browser — files are never uploaded.</p>
             </div>
-            <div id="har-content" class="hidden">
-                <div class="toolbar">
-                    <button id="refresh-btn">Refresh</button>
-                    <button id="export-btn">Export</button>
+        </div>
+
+        <!-- Main viewer: hidden until a file is loaded. -->
+        <div id="har-content" class="hidden">
+            <header class="app-header">
+                <div class="app-title">HAR Viewer</div>
+                <div id="file-info"></div>
+                <div class="header-actions">
+                    <button id="load-new-btn" type="button">Load New File</button>
+                    <button id="export-btn" type="button">Export</button>
                 </div>
+            </header>
+
+            <div class="filter-bar">
+                <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
+                <span id="result-count" class="result-count"></span>
+                <div id="filter-hint" class="filter-hint">
+                    Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
+                    <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
+                    <code>duration</code>, <code>size</code> · prefix <code>-</code> to negate ·
+                    numeric fields support <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> ·
+                    plain text matches the URL
+                </div>
+            </div>
+
+            <div class="main-layout">
                 <div class="request-list-container">
                     <table id="requests-table">
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Method</th>
-                                <th>URL</th>
-                                <th>Status</th>
-                                <th>Type</th>
-                                <th>Size</th>
-                                <th>Time</th>
+                                <th>Code</th>
+                                <th>Protocol</th>
+                                <th>Host</th>
+                                <th>Path</th>
+                                <th>Body Size</th>
+                                <th>Content-Type</th>
+                                <th>Duration</th>
+                                <th>Start</th>
                             </tr>
                         </thead>
-                        <tbody id="requests-table-body">
-                        </tbody>
+                        <tbody id="requests-table-body"></tbody>
                     </table>
                 </div>
-                <div class="request-details-container">
-                    <div id="request-details"></div>
+
+                <div id="detail-panel" class="detail-panel">
+                    <div id="detail-empty-state" class="detail-empty-state">
+                        Select a request to inspect its details.
+                    </div>
+                    <div id="detail-content" class="hidden"></div>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
     <script type="module" src="/src/index.js"></script>
 </body>

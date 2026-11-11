@@ -1,42 +1,60 @@
 import { HarParser } from './utils/harParser.js';
-import { UIManager } from './components/UIManager.js';
+import { FileDropZone } from './components/FileDropZone.js';
+import { RequestTable } from './components/RequestTable.js';
+import { DetailPanel } from './components/DetailPanel.js';
 
-// Main application class
+// Main application class - orchestrates loading a HAR file locally and
+// wiring the drop zone, request table and detail panel together.
 class HarViewerApp {
   constructor() {
-    this.uiManager = new UIManager();
     this.harParser = new HarParser();
     this.currentHarData = null;
+    this.currentFileName = null;
+
+    this.dropZone = new FileDropZone({
+      onFileSelected: (file) => this.handleFile(file),
+      onError: (message) => this.showErrorMessage(message)
+    });
+
+    this.requestTable = new RequestTable({
+      onSelect: (entry) => this.detailPanel.render(entry)
+    });
+
+    this.detailPanel = new DetailPanel();
 
     this.init();
   }
 
   init() {
-    // Set up event listeners
-    const fileInput = document.getElementById('har-file-input');
-    const refreshBtn = document.getElementById('refresh-btn');
-    const exportBtn = document.getElementById('export-btn');
-
-    fileInput.addEventListener('change', (event) => this.handleFileUpload(event));
-    refreshBtn.addEventListener('click', () => this.refreshView());
-    exportBtn.addEventListener('click', () => this.exportData());
+    document.getElementById('load-new-btn').addEventListener('click', () => this.resetToDropScreen());
+    document.getElementById('export-btn').addEventListener('click', () => this.exportData());
 
     console.log('HAR Viewer App initialized');
   }
 
-  async handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
+  // Reads the File object locally via FileReader - the file is never sent
+  // to any server, only parsed in-memory in the browser.
+  async handleFile(file) {
     try {
       const harData = await this.readFileAsJson(file);
       this.currentHarData = harData;
-      this.uiManager.displayFileInfo(file.name, file.size);
-      this.uiManager.showHarContent();
-      this.renderHarData(harData);
+      this.currentFileName = file.name;
+
+      const parsedData = this.harParser.parse(harData);
+
+      this.dropZone.hide();
+      document.getElementById('har-content').classList.remove('hidden');
+      this.displayFileInfo(file.name, file.size);
+
+      this.requestTable.setEntries(parsedData.entries);
+      this.detailPanel.showEmptyState();
     } catch (error) {
       console.error('Error processing HAR file:', error);
-      this.uiManager.showErrorMessage('Failed to process HAR file. Please ensure it is a valid JSON file.');
+      this.showErrorMessage(
+        error.message && error.message.includes('Invalid HAR')
+          ? error.message
+          : 'Failed to process HAR file. Please ensure it is a valid HAR (JSON) file.'
+      );
     }
   }
 
@@ -45,8 +63,7 @@ class HarViewerApp {
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const jsonData = JSON.parse(event.target.result);
-          resolve(jsonData);
+          resolve(JSON.parse(event.target.result));
         } catch (error) {
           reject(new Error('Invalid JSON format'));
         }
@@ -56,38 +73,48 @@ class HarViewerApp {
     });
   }
 
-  renderHarData(harData) {
-    try {
-      const parsedData = this.harParser.parse(harData);
-      this.uiManager.renderRequestList(parsedData.entries);
-      this.uiManager.setupRequestDetailsHandler(parsedData.entries);
-    } catch (error) {
-      console.error('Error parsing HAR data:', error);
-      this.uiManager.showErrorMessage('Failed to parse HAR data. Please ensure it follows the HAR specification.');
-    }
+  displayFileInfo(fileName, fileSize) {
+    const fileInfoDiv = document.getElementById('file-info');
+    fileInfoDiv.textContent = `${fileName} (${this.harParser.formatBytes(fileSize)})`;
   }
 
-  refreshView() {
-    if (this.currentHarData) {
-      this.renderHarData(this.currentHarData);
-    }
+  resetToDropScreen() {
+    this.currentHarData = null;
+    this.currentFileName = null;
+    document.getElementById('har-content').classList.add('hidden');
+    document.getElementById('file-info').textContent = '';
+    this.dropZone.show();
   }
 
   exportData() {
     if (!this.currentHarData) {
-      this.uiManager.showErrorMessage('No data to export');
+      this.showErrorMessage('No data to export');
       return;
     }
 
     const dataStr = JSON.stringify(this.currentHarData, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-
-    const exportFileDefaultName = 'har-export.json';
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
 
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.setAttribute('download', this.currentFileName || 'har-export.json');
     linkElement.click();
+  }
+
+  showErrorMessage(message) {
+    let errorDiv = document.getElementById('error-message');
+    if (!errorDiv) {
+      errorDiv = document.createElement('div');
+      errorDiv.id = 'error-message';
+      document.getElementById('app').prepend(errorDiv);
+    }
+    errorDiv.textContent = message;
+    errorDiv.classList.add('visible');
+
+    clearTimeout(this._errorTimeout);
+    this._errorTimeout = setTimeout(() => {
+      errorDiv.classList.remove('visible');
+    }, 5000);
   }
 }
 
