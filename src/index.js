@@ -47,7 +47,7 @@ class HarViewerApp {
   // parsing the JSON.
   async handleFile(file) {
     try {
-      const harData = await this.readFileAsJson(file);
+      const { harData, uncompressedSize } = await this.readFileAsJson(file);
       this.currentHarData = harData;
       this.currentFileName = file.name;
 
@@ -55,7 +55,7 @@ class HarViewerApp {
 
       this.dropZone.hide();
       document.getElementById('har-content').classList.remove('hidden');
-      this.displayFileInfo(file.name, file.size);
+      this.displayFileInfo(file.name, file.size, uncompressedSize);
 
       this.requestTable.setEntries(parsedData.entries);
       this.detailPanel.showEmptyState();
@@ -70,12 +70,16 @@ class HarViewerApp {
   }
 
   async readFileAsJson(file) {
-    const text = /\.gz$/i.test(file.name)
+    const isGzipped = /\.gz$/i.test(file.name);
+    const text = isGzipped
       ? await this.readGzipFileAsText(file)
       : await this.readFileAsText(file);
 
     try {
-      return JSON.parse(text);
+      return {
+        harData: JSON.parse(text),
+        uncompressedSize: isGzipped ? new Blob([text]).size : null
+      };
     } catch (error) {
       throw new Error('Invalid JSON format');
     }
@@ -95,9 +99,12 @@ class HarViewerApp {
     return new Response(decompressedStream).text();
   }
 
-  displayFileInfo(fileName, fileSize) {
+  displayFileInfo(fileName, fileSize, uncompressedSize) {
     const fileInfoDiv = document.getElementById('file-info');
-    fileInfoDiv.textContent = `${fileName} (${this.harParser.formatBytes(fileSize)})`;
+    const sizeText = uncompressedSize != null
+      ? `${this.harParser.formatBytes(fileSize)} compressed, ${this.harParser.formatBytes(uncompressedSize)} uncompressed`
+      : this.harParser.formatBytes(fileSize);
+    fileInfoDiv.textContent = `${fileName} (${sizeText})`;
   }
 
   resetToDropScreen() {
