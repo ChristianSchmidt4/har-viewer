@@ -10,7 +10,7 @@ import { computeAggregateStats } from '../utils/aggregateStats.js';
 import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
 
 type Side = 'request' | 'response';
-type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax';
+type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax' | 'image';
 type AggregateTabKey = 'timeline' | 'stats';
 
 interface SubTab {
@@ -22,7 +22,8 @@ const SUB_TABS: SubTab[] = [
   { key: 'headers', label: 'Headers' },
   { key: 'raw', label: 'Raw' },
   { key: 'cookies', label: 'Cookies' },
-  { key: 'syntax', label: 'Syntax' }
+  { key: 'syntax', label: 'Syntax' },
+  { key: 'image', label: 'Image' }
 ];
 
 // One segment of the waterfall bar per Fiddler's Timeline documentation
@@ -74,10 +75,13 @@ export class DetailPanel {
     this.emptyStateEl.classList.add('hidden');
     this.contentEl.classList.remove('hidden');
 
-    // The Syntax tab only makes sense when there's a body to highlight;
-    // fall back to Headers if the previously active tab no longer applies.
+    // The Syntax/Image tabs may disappear if the entry no longer applies;
+    // fall back to Headers if the previously active tab no longer fits.
     (['request', 'response'] as const).forEach(side => {
       if (this.activeSubTab[side] === 'syntax' && !this.hasBody(side, entry)) {
+        this.activeSubTab[side] = 'headers';
+      }
+      if (side === 'response' && this.activeSubTab[side] === 'image' && !this.isImage(entry)) {
         this.activeSubTab[side] = 'headers';
       }
     });
@@ -370,6 +374,37 @@ export class DetailPanel {
     return Boolean(entry.response.content && entry.response.content.text);
   }
 
+  private isImage(entry: ParsedEntry): boolean {
+    const contentType = entry.contentType;
+    return contentType === 'image' || contentType.startsWith('image/');
+  }
+
+  private renderImage(entry: ParsedEntry): string {
+    const content = entry.response.content;
+    if (!content || !content.text) return '<p class="empty-note">No image data</p>';
+
+    let dataUrl: string;
+    try {
+      if (content.encoding === 'base64') {
+        dataUrl = `data:${content.mimeType || 'image/png'};base64,${content.text}`;
+      } else {
+        dataUrl = `data:${content.mimeType || 'image/png'};base64,${btoa(unescape(encodeURIComponent(content.text)))}`;
+      }
+    } catch {
+      return '<p class="empty-note">Unable to decode image data</p>';
+    }
+
+    return `
+      <div class="image-preview">
+        <img src="${escapeHtml(dataUrl)}" alt="${escapeHtml(entry.request.url)}" />
+        <div class="image-meta">
+          <span>${escapeHtml(content.mimeType || 'unknown')}</span> ·
+          <span>${this.harParser.formatBytes(content.size)}</span>
+        </div>
+      </div>
+    `;
+  }
+
   private bindDetailSplitter(): void {
     const columnsEl = this.contentEl.querySelector<HTMLElement>('#detail-columns');
     const splitterEl = this.contentEl.querySelector<HTMLElement>('#detail-splitter');
@@ -386,7 +421,11 @@ export class DetailPanel {
   }
 
   private renderSubTabs(side: Side, entry: ParsedEntry): string {
-    const tabs = SUB_TABS.filter(tab => tab.key !== 'syntax' || this.hasBody(side, entry));
+    const tabs = SUB_TABS.filter(tab => {
+      if (tab.key === 'syntax') return this.hasBody(side, entry);
+      if (tab.key === 'image') return side === 'response' && this.isImage(entry);
+      return true;
+    });
     return `
       <div class="sub-tabs" data-side-tabs="${side}">
         ${tabs.map(tab => `
@@ -429,6 +468,9 @@ export class DetailPanel {
         break;
       case 'syntax':
         panelEl.innerHTML = this.renderSyntax(side, entry);
+        break;
+      case 'image':
+        panelEl.innerHTML = this.renderImage(entry);
         break;
       default:
         panelEl.innerHTML = '';
