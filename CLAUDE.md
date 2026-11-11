@@ -357,7 +357,8 @@ Future enhancements could include:
 
 Static deployment only — no server-side requirements, and the app never
 makes network requests with user data. Can be deployed to any static
-hosting service (GitHub Pages, Netlify, Vercel, etc.).
+hosting service (GitHub Pages, Netlify, Vercel, etc.). Static assets such
+as `public/favicon.svg` are copied to the dist root by Vite.
 
 ## Browser Compatibility
 
