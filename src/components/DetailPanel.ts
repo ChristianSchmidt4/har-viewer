@@ -245,7 +245,7 @@ export class DetailPanel {
     const edgeMarginMs = rangeMs * 0.22;
     for (let offset = step; offset < rangeMs; offset += step) {
       if (offset < edgeMarginMs || rangeMs - offset < edgeMarginMs) continue;
-      ticks.push(`<span class="timeline-tick" style="left:${unit(offset)}">+${this.harParser.formatTime(offset)}</span>`);
+      ticks.push(`<span class="timeline-tick" style="left:${unit(offset)}" data-value="${offset}">${this.harParser.formatTime(offset)}</span>`);
     }
 
     return `

@@ -40,6 +40,13 @@
                     <div class="filter-bar">
                         <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
                         <span id="result-count" class="result-count"></span>
+                        <div id="custom-col-controls" class="custom-col-controls">
+                            <input type="text" id="custom-col-input" placeholder="Add column, e.g. reqheader:X-Trace" />
+                            <span id="custom-col-hint" class="custom-col-hint">
+                                Examples: <code>reqheader:X-Trace</code>, <code>resheader:Content-Encoding</code>,
+                                <code>reqcookie:sessionid</code>, <code>rescookie:track</code>
+                            </span>
+                        </div>
                         <div id="filter-hint" class="filter-hint">
                             Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
                             <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
@@ -60,7 +67,7 @@
                     </div>
                     <div class="request-table-scroll">
                         <table id="requests-table">
-                            <thead>
+                            <thead id="requests-table-thead">
                                 <tr>
                                     <th>#</th>
                                     <th>Code</th>

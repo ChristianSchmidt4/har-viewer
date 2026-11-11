@@ -2,10 +2,15 @@
 // Columns: index, response code, http protocol, host, path, body size,
 // content-type, overall request duration, start time relative to the first
 // request in the archive.
+//
+// Custom columns can be added via setCustomColumns() — they render as
+// additional <th>/<td> pairs after the built-in columns.
 import { HarParser } from '../utils/harParser.js';
 import { filterEntries } from '../utils/filterParser.js';
 import { escapeHtml, truncateText } from '../utils/domUtils.js';
+import { evaluateCustomColumn } from '../utils/customColumns.js';
 import type { ParsedEntry } from '../types/har.js';
+import type { CustomColumn } from '../utils/customColumns.js';
 
 interface Column {
   key: string;
@@ -27,6 +32,7 @@ const COLUMNS: Column[] = [
 export interface RequestTableOptions {
   onSelect: (entry: ParsedEntry) => void;
   onMultiSelect: (entries: ParsedEntry[]) => void;
+  onCustomColumnRemove?: (columnId: string) => void;
 }
 
 export class RequestTable {
@@ -44,22 +50,31 @@ export class RequestTable {
   private filterHintEl: HTMLElement;
   private tableBodyEl: HTMLElement;
   private resultCountEl: HTMLElement;
+  private theadEl: HTMLElement;
 
-  constructor({ onSelect, onMultiSelect }: RequestTableOptions) {
+  private customColumns: CustomColumn[];
+
+  private onCustomColumnRemove?: (columnId: string) => void;
+
+  constructor({ onSelect, onMultiSelect, onCustomColumnRemove }: RequestTableOptions) {
     this.onSelect = onSelect;
     this.onMultiSelect = onMultiSelect;
+    this.onCustomColumnRemove = onCustomColumnRemove;
     this.harParser = new HarParser();
 
     this.allEntries = [];
     this.visibleEntries = [];
     this.selectedEntryIds = new Set();
     this.lastSelectedEntryId = null;
+    this.customColumns = [];
 
     this.filterInputEl = document.getElementById('request-filter') as HTMLInputElement;
     this.filterHintEl = document.getElementById('filter-hint')!;
     this.tableBodyEl = document.getElementById('requests-table-body')!;
     this.resultCountEl = document.getElementById('result-count')!;
+    this.theadEl = document.getElementById('requests-table-thead')!;
 
+    this.renderHeader();
     this.bindEvents();
   }
 
@@ -90,6 +105,17 @@ export class RequestTable {
         this.selectEntry(entryId);
       }
     });
+
+    // Close button on custom column headers.
+    this.theadEl.addEventListener('click', (event) => {
+      const btn = (event.target as HTMLElement).closest<HTMLElement>('.col-custom-remove');
+      if (!btn) return;
+      event.stopPropagation();
+      const columnId = btn.dataset.columnId;
+      if (columnId && this.onCustomColumnRemove) {
+        this.onCustomColumnRemove(columnId);
+      }
+    });
   }
 
   setEntries(entries: ParsedEntry[]): void {
@@ -98,6 +124,16 @@ export class RequestTable {
     this.lastSelectedEntryId = null;
     this.filterInputEl.value = '';
     this.applyFilter();
+  }
+
+  setCustomColumns(columns: CustomColumn[]): void {
+    this.customColumns = columns;
+    this.renderHeader();
+    this.render();
+  }
+
+  getCustomColumns(): CustomColumn[] {
+    return this.customColumns;
   }
 
   // Returns the entries currently passing the filter (same objects as
@@ -110,6 +146,18 @@ export class RequestTable {
     const query = this.filterInputEl.value;
     this.visibleEntries = filterEntries(this.allEntries, query);
     this.render();
+  }
+
+  private renderHeader(): void {
+    const customThs = this.customColumns.map(col =>
+      `<th class="col-custom">${escapeHtml(col.label)}<button class="col-custom-remove" data-column-id="${escapeHtml(col.id)}" title="Remove column">&times;</button></th>`
+    ).join('');
+    this.theadEl.innerHTML = `
+      <tr>
+        ${COLUMNS.map(c => `<th>${c.label}</th>`).join('')}
+        ${customThs}
+      </tr>
+    `;
   }
 
   private render(): void {
@@ -141,6 +189,11 @@ export class RequestTable {
       ? this.harParser.formatBytes(entry.response.bodySize)
       : 'N/A';
 
+    const customCells = this.customColumns.map(col => {
+      const value = evaluateCustomColumn(col, entry);
+      return `<td class="col-custom" title="${escapeHtml(value)}">${escapeHtml(value || '—')}</td>`;
+    }).join('');
+
     row.innerHTML = `
       <td class="col-index">${entry.id + 1}</td>
       <td class="col-status ${statusClass}">${status || '—'}</td>
@@ -151,6 +204,7 @@ export class RequestTable {
       <td class="col-type">${escapeHtml(entry.contentType)}</td>
       <td class="col-duration">${this.harParser.formatTime(entry.time)}</td>
       <td class="col-start">${this.harParser.formatRelativeTime(entry.relativeStartMs)}</td>
+      ${customCells}
     `;
     return row;
   }

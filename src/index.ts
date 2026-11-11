@@ -3,7 +3,9 @@ import { FileDropZone } from './components/FileDropZone.js';
 import { RequestTable } from './components/RequestTable.js';
 import { DetailPanel } from './components/DetailPanel.js';
 import { makeResizer } from './utils/resizer.js';
+import { loadCustomColumns, saveCustomColumns, addCustomColumn, removeCustomColumn } from './utils/customColumns.js';
 import type { HarData, ParsedEntry } from './types/har.js';
+import type { CustomColumn } from './utils/customColumns.js';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
@@ -34,6 +36,14 @@ class HarViewerApp {
         } else {
           this.detailPanel.renderMultiSelect(entries);
         }
+      },
+      onCustomColumnRemove: (columnId) => {
+        const columns = this.requestTable.getCustomColumns();
+        const updated = removeCustomColumn(columns, columnId);
+        columns.length = 0;
+        columns.push(...updated);
+        saveCustomColumns(columns);
+        this.requestTable.setCustomColumns(columns);
       }
     });
 
@@ -45,6 +55,9 @@ class HarViewerApp {
   private init(): void {
     document.getElementById('load-new-btn')!.addEventListener('click', () => this.resetToDropScreen());
     document.getElementById('export-btn')!.addEventListener('click', () => this.exportData());
+
+    // Custom column control: add a column when Enter is pressed.
+    this.initCustomColControl();
 
     makeResizer({
       splitterEl: document.getElementById('main-splitter')!,
@@ -198,6 +211,38 @@ class HarViewerApp {
     this.errorTimeout = setTimeout(() => {
       errorDiv!.classList.remove('visible');
     }, 5000);
+  }
+
+  private initCustomColControl(): void {
+    const inputEl = document.getElementById('custom-col-input') as HTMLInputElement;
+    if (!inputEl) return;
+
+    const columns = loadCustomColumns();
+    this.requestTable.setCustomColumns(columns);
+
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const expr = inputEl.value.trim().toLowerCase();
+      if (!expr) return;
+
+      // Validate that it's a known custom-column expression.
+      const validPrefixes = ['reqheader', 'resheader', 'reqcookie', 'rescookie'];
+      const parts = expr.split(':');
+      if (parts.length < 2 || !validPrefixes.includes(parts[0]!)) {
+        inputEl.value = '';
+        return;
+      }
+
+      // Use the part before = as the label; fall back to the full expression.
+      const namePart = parts[1]!.split('=')[0] || parts[1];
+      const label = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1) + '/' + namePart;
+      const updated = addCustomColumn(columns, label, expr);
+      columns.length = 0;
+      columns.push(...updated);
+      saveCustomColumns(columns);
+      this.requestTable.setCustomColumns(columns);
+      inputEl.value = '';
+    });
   }
 }
 
