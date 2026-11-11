@@ -57,7 +57,7 @@ export class HarParser {
         protocol: response.httpVersion || request.httpVersion || '',
         host: urlParts.host,
         path: urlParts.path,
-        contentType: this.getContentType(response.content.mimeType)
+        contentType: this.getContentType(response.content.mimeType, this.hasResponseBody(response))
       };
     });
   }
@@ -206,8 +206,14 @@ export class HarParser {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
-  // Get a short content-type label from a MIME type
-  getContentType(mimeType: string): string {
+  hasResponseBody(response: ParsedResponse): boolean {
+    return response.content.size > 0 || response.bodySize > 0;
+  }
+
+  // Get a short content-type label from a MIME type. Empty when there is
+  // neither a MIME type nor a body; 'other' for a body of unknown type.
+  getContentType(mimeType: string, hasBody = true): string {
+    if (!mimeType && !hasBody) return '';
     if (!mimeType) return 'other';
     const mime = mimeType.toLowerCase();
     if (mime.includes('text/html')) return 'html';

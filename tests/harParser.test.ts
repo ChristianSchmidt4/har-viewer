@@ -98,6 +98,8 @@ describe('HarParser', () => {
       expect(parser.getContentType('application/json')).toBe('json');
       expect(parser.getContentType('text/xml')).toBe('xml');
       expect(parser.getContentType('unknown/type')).toBe('other');
+      expect(parser.getContentType('', false)).toBe('');
+      expect(parser.getContentType('', true)).toBe('other');
     });
   });
 
