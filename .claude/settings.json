@@ -8,12 +8,34 @@
     "performance-analysis"
   ],
   "hooks": {
-    "onFileCreate": {
-      "command": "echo 'New file created: $FILE_PATH'"
-    },
-    "onBuild": {
-      "command": "npm run build"
-    }
+    "PostToolUse": [
+      {
+        "match": {
+          "tool": "Write"
+        },
+        "action": {
+          "command": "echo 'New file created: $FILE_PATH'"
+        }
+      },
+      {
+        "match": {
+          "tool": "Edit"
+        },
+        "action": {
+          "command": "echo 'File modified: $FILE_PATH'"
+        }
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "match": {
+          "command": "npm run build"
+        },
+        "action": {
+          "command": "echo 'Build completed'"
+        }
+      }
+    ]
   },
   "permissions": {
     "read": [
