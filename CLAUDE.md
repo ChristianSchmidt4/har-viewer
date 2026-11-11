@@ -99,7 +99,7 @@ panes stack vertically under 900px width.
 ## Common Tasks
 
 ### Adding a Column to the Request Table
-1. Add a `<th>` in `public/index.html`'s `#requests-table thead`
+1. Add a `<th>` in `index.html`'s `#requests-table thead`
 2. Update `RequestTable.buildRow` in `RequestTable.js` to add the matching `<td>`
 3. Ensure the value is available on the parsed entry (extend `HarParser` if not)
 
@@ -107,7 +107,7 @@ panes stack vertically under 900px width.
 1. Add the field to `FIELD_ALIASES` in `filterParser.js` (and to
    `NUMERIC_FIELDS` if it's a number)
 2. Add a case for it in `getFieldValue` in the same file
-3. Update the hint text in `public/index.html`'s `#filter-hint`
+3. Update the hint text in `index.html`'s `#filter-hint`
 
 ### Adding a Sub-Tab to the Detail Panel
 1. Add the tab to `SUB_TABS` in `DetailPanel.js`

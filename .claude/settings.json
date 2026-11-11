@@ -40,13 +40,13 @@
   "permissions": {
     "read": [
       "src/**/*",
-      "public/**/*",
+      "index.html",
       "docs/**/*",
       "tests/**/*"
     ],
     "write": [
       "src/**/*",
-      "public/**/*",
+      "index.html",
       "docs/**/*",
       "tests/**/*"
     ]

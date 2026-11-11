@@ -31,7 +31,7 @@ har_viewer/
 │   ├── styles/
 │   │   └── main.css          # All styling (drop screen + viewer)
 │   └── index.js              # Main entry point / app orchestration
-├── public/             # Static assets and HTML
+├── index.html           # App shell (loads /src/index.js as a module)
 ├── docs/               # Documentation (incl. HAR format reference, sample.har)
 ├── tests/              # Test files (mirrors src/ structure)
 ├── .claude/            # Claude Code configuration
