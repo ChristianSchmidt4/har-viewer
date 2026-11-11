@@ -115,18 +115,33 @@ class HarViewerApp {
     this.dropZone.show();
   }
 
+  // Exports only the entries currently passing the request table's filter,
+  // as a standalone .har (JSON) file - the full HAR structure is kept, but
+  // log.entries is reduced to the filtered subset.
   exportData() {
     if (!this.currentHarData) {
       this.showErrorMessage('No data to export');
       return;
     }
 
-    const dataStr = JSON.stringify(this.currentHarData, null, 2);
+    const visibleIds = new Set(this.requestTable.getVisibleEntries().map(entry => entry.id));
+    const filteredHarData = {
+      ...this.currentHarData,
+      log: {
+        ...this.currentHarData.log,
+        entries: this.currentHarData.log.entries.filter((_, index) => visibleIds.has(index))
+      }
+    };
+
+    const dataStr = JSON.stringify(filteredHarData, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+    const baseName = (this.currentFileName || 'har-export').replace(/\.gz$/i, '').replace(/\.har$/i, '');
+    const exportFileName = `${baseName}.filtered.har`;
 
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', this.currentFileName || 'har-export.json');
+    linkElement.setAttribute('download', exportFileName);
     linkElement.click();
   }
 

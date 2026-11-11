@@ -63,6 +63,12 @@ export class RequestTable {
     this.applyFilter();
   }
 
+  // Returns the entries currently passing the filter (same objects as
+  // allEntries, so entry.id maps back to the original HAR entry index).
+  getVisibleEntries() {
+    return this.visibleEntries;
+  }
+
   applyFilter() {
     const query = this.filterInputEl.value;
     this.visibleEntries = filterEntries(this.allEntries, query);

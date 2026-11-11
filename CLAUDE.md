@@ -49,7 +49,9 @@ server and production build only ever serve static files.
    the filter input, debounces keystrokes 250ms before re-filtering via
    `filterParser`, and renders rows with columns: index, response code,
    protocol, host, path, body size, content-type, duration, and relative
-   start time. Emits `onSelect(entry)` when a row is clicked.
+   start time. Emits `onSelect(entry)` when a row is clicked. Exposes
+   `getVisibleEntries()` so other components (e.g. the Export button in
+   `index.js`) can get the currently filtered-in entries.
 3. **DetailPanel** (`DetailPanel.js`) - Right-pane detail view. Splits into
    a Request side and a Response side, each with independent Headers / Raw
    / Cookies / Syntax sub-tabs (state remembered per side across selections).
@@ -57,6 +59,12 @@ server and production build only ever serve static files.
 ### Orchestration
 - **Main Application** (`src/index.js`) - Reads the file locally, calls
   `HarParser.parse`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`.
+  Also implements the header's **Export** button (`exportData`), which
+  downloads the entries currently passing the request table's filter (via
+  `RequestTable.getVisibleEntries`) as a standalone `.har` (JSON) file,
+  named `<original-name>.filtered.har`. The button's `title` tooltip states
+  what/format is exported; keep it in sync if the export format or scope
+  changes.
 
 ## Development Workflow with Claude Code
 
