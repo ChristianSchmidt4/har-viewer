@@ -174,14 +174,14 @@ button:hover {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-/* Filter bar */
+/* Filter bar (now scoped to the request list column, not the whole app) */
 
 .filter-bar {
   position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 1.25rem;
+  padding: 0.6rem 0.9rem;
   background-color: var(--light-gray);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
@@ -210,8 +210,8 @@ button:hover {
 .filter-hint {
   position: absolute;
   top: 100%;
-  left: 1.25rem;
-  right: 1.25rem;
+  left: 0.9rem;
+  right: 0.9rem;
   z-index: 10;
   margin-top: 0.25rem;
   padding: 0.6rem 0.9rem;
@@ -245,10 +245,70 @@ button:hover {
 }
 
 .request-list-container {
-  width: 46%;
-  min-width: 320px;
+  flex: 0 0 46%;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.request-table-scroll {
+  flex: 1;
   overflow: auto;
-  border-right: 1px solid var(--border-color);
+}
+
+/* Splitters */
+
+.splitter {
+  flex-shrink: 0;
+  background-color: var(--border-color);
+  position: relative;
+}
+
+.splitter::after {
+  content: '';
+  position: absolute;
+}
+
+.splitter-vertical {
+  width: 5px;
+  cursor: col-resize;
+}
+
+.splitter-vertical::after {
+  top: 0;
+  bottom: 0;
+  left: -2px;
+  right: -2px;
+}
+
+.splitter-horizontal {
+  height: 5px;
+  cursor: row-resize;
+}
+
+.splitter-horizontal::after {
+  left: 0;
+  right: 0;
+  top: -2px;
+  bottom: -2px;
+}
+
+.splitter:hover,
+.splitter:active {
+  background-color: var(--secondary-color);
+}
+
+body.resizing-horizontal,
+body.resizing-horizontal * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.resizing-vertical,
+body.resizing-vertical * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 #requests-table {
@@ -302,8 +362,18 @@ button:hover {
 
 .detail-panel {
   flex: 1;
-  overflow: auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#detail-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
 }
 
 .detail-empty-state {
@@ -348,18 +418,16 @@ button:hover {
 
 .detail-columns {
   display: flex;
-  min-height: calc(100% - 50px);
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .detail-side {
   flex: 1;
-  min-width: 0;
+  min-height: 80px;
   padding: 0.75rem 1rem;
   overflow: auto;
-}
-
-.detail-side:first-child {
-  border-right: 1px solid var(--border-color);
 }
 
 .detail-side h3 {
@@ -507,19 +575,15 @@ button:hover {
     flex-direction: column;
   }
 
+  .splitter-vertical {
+    width: auto;
+    height: 5px;
+    cursor: row-resize;
+  }
+
   .request-list-container {
+    flex-basis: 40vh !important;
     width: 100%;
-    max-height: 40vh;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .detail-columns {
-    flex-direction: column;
-  }
-
-  .detail-side:first-child {
-    border-right: none;
     border-bottom: 1px solid var(--border-color);
   }
 }

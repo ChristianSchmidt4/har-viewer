@@ -4,6 +4,7 @@
 import { HarParser } from '../utils/harParser.js';
 import { escapeHtml } from '../utils/domUtils.js';
 import { buildRawRequest, buildRawResponse, highlightSyntax } from '../utils/httpFormatter.js';
+import { makeResizer } from '../utils/resizer.js';
 
 const SUB_TABS = [
   { key: 'headers', label: 'Headers' },
@@ -39,12 +40,13 @@ export class DetailPanel {
         <span class="summary-url" title="${escapeHtml(entry.request.url)}">${escapeHtml(entry.request.url)}</span>
         <span class="summary-status">${entry.response.status} ${escapeHtml(entry.response.statusText)}</span>
       </div>
-      <div class="detail-columns">
+      <div class="detail-columns" id="detail-columns">
         <section class="detail-side" data-side="request">
           <h3>Request</h3>
           ${this.renderSubTabs('request')}
           <div class="sub-tab-panels" data-side-panels="request"></div>
         </section>
+        <div id="detail-splitter" class="splitter splitter-horizontal"></div>
         <section class="detail-side" data-side="response">
           <h3>Response</h3>
           ${this.renderSubTabs('response')}
@@ -56,6 +58,22 @@ export class DetailPanel {
     this.bindSubTabs(entry);
     this.renderSidePanel('request', entry);
     this.renderSidePanel('response', entry);
+    this.bindDetailSplitter();
+  }
+
+  bindDetailSplitter() {
+    const columnsEl = this.contentEl.querySelector('#detail-columns');
+    const splitterEl = this.contentEl.querySelector('#detail-splitter');
+    const requestSideEl = this.contentEl.querySelector('[data-side="request"]');
+    if (!columnsEl || !splitterEl || !requestSideEl) return;
+
+    makeResizer({
+      splitterEl,
+      targetEl: requestSideEl,
+      containerEl: columnsEl,
+      direction: 'vertical',
+      min: 80
+    });
   }
 
   renderSubTabs(side) {

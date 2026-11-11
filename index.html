@@ -34,37 +34,40 @@
                 </div>
             </header>
 
-            <div class="filter-bar">
-                <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
-                <span id="result-count" class="result-count"></span>
-                <div id="filter-hint" class="filter-hint">
-                    Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
-                    <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
-                    <code>duration</code>, <code>size</code> · prefix <code>-</code> to negate ·
-                    numeric fields support <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> ·
-                    plain text matches the URL
-                </div>
-            </div>
-
             <div class="main-layout">
-                <div class="request-list-container">
-                    <table id="requests-table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Code</th>
-                                <th>Protocol</th>
-                                <th>Host</th>
-                                <th>Path</th>
-                                <th>Body Size</th>
-                                <th>Content-Type</th>
-                                <th>Duration</th>
-                                <th>Start</th>
-                            </tr>
-                        </thead>
-                        <tbody id="requests-table-body"></tbody>
-                    </table>
+                <div id="request-list-container" class="request-list-container">
+                    <div class="filter-bar">
+                        <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
+                        <span id="result-count" class="result-count"></span>
+                        <div id="filter-hint" class="filter-hint">
+                            Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
+                            <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
+                            <code>duration</code>, <code>size</code> · prefix <code>-</code> to negate ·
+                            numeric fields support <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> ·
+                            plain text matches the URL
+                        </div>
+                    </div>
+                    <div class="request-table-scroll">
+                        <table id="requests-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Code</th>
+                                    <th>Protocol</th>
+                                    <th>Host</th>
+                                    <th>Path</th>
+                                    <th>Body Size</th>
+                                    <th>Content-Type</th>
+                                    <th>Duration</th>
+                                    <th>Start</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-table-body"></tbody>
+                        </table>
+                    </div>
                 </div>
+
+                <div id="main-splitter" class="splitter splitter-vertical"></div>
 
                 <div id="detail-panel" class="detail-panel">
                     <div id="detail-empty-state" class="detail-empty-state">

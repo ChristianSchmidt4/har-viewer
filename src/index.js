@@ -2,6 +2,7 @@ import { HarParser } from './utils/harParser.js';
 import { FileDropZone } from './components/FileDropZone.js';
 import { RequestTable } from './components/RequestTable.js';
 import { DetailPanel } from './components/DetailPanel.js';
+import { makeResizer } from './utils/resizer.js';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
@@ -28,6 +29,14 @@ class HarViewerApp {
   init() {
     document.getElementById('load-new-btn').addEventListener('click', () => this.resetToDropScreen());
     document.getElementById('export-btn').addEventListener('click', () => this.exportData());
+
+    makeResizer({
+      splitterEl: document.getElementById('main-splitter'),
+      targetEl: document.getElementById('request-list-container'),
+      containerEl: document.querySelector('.main-layout'),
+      direction: 'horizontal',
+      min: 280
+    });
 
     console.log('HAR Viewer App initialized');
   }
