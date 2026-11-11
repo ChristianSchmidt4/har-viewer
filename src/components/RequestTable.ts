@@ -274,8 +274,10 @@ export class RequestTable {
       : status >= 300 && status < 400 ? 'status-redirect'
       : '';
 
-    const bodySize = entry.response.bodySize >= 0
-      ? this.harParser.formatBytes(entry.response.bodySize)
+    const requestBodySize = Math.max(entry.request.bodySize, 0);
+    const responseBodySize = Math.max(entry.response.bodySize, 0);
+    const bodySize = entry.request.bodySize >= 0 || entry.response.bodySize >= 0
+      ? this.harParser.formatBytes(requestBodySize + responseBodySize)
       : 'N/A';
 
     const customCells = this.customColumns.map(col => {
