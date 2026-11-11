@@ -1,23 +1,35 @@
-// Parses and applies a simple, Fiddler/DevTools-like filter query against
-// HAR entries.
+// Parses and applies a Fiddler/DevTools-like filter query against HAR
+// entries.
 //
 // Supported syntax:
-//   plain text            -> substring match against the full URL
-//   field:value            -> exact/substring match on a known field
-//   -field:value           -> negated match
+//   plain text              -> substring match against method + URL
+//   field:value              -> match on a known field
+//   -field:value             -> negated match
+//   not field:value          -> negated match (keyword form)
 //   field:>value, field:<value, field:>=value, field:<=value
-//                           -> numeric comparison (status, duration, size)
-//   multiple terms are combined with AND (space separated)
+//                             -> numeric comparison (status, duration, size)
+//   a and b, a or b, (a or b) and c
+//                             -> logical AND / OR / grouping; space between
+//                                clauses with no keyword means AND
+//   reqheader:name=value      -> request header "name" contains "value"
+//   resheader:name=value      -> response header "name" contains "value"
+//   reqcookie:name=value      -> request cookie "name" contains "value"
+//   rescookie:name=value      -> response cookie "name" contains "value"
+//   reqheader:name (no =)     -> request header "name" is present (any value)
+//                                (same presence-check form for resheader/
+//                                reqcookie/rescookie)
 //
-// Known fields: method, status, host, path, protocol, type (content-type),
-// duration (ms), size (bytes). Unknown field prefixes fall back to a plain
-// substring match on the URL so the filter never "breaks".
+// Known plain fields: method, status, host, path, protocol, type
+// (content-type), duration (ms), size (bytes). Unknown field prefixes fall
+// back to a plain substring match on the URL so the filter never "breaks".
 //
 // Examples:
 //   status:200 method:GET
 //   host:example.com -type:image
 //   duration:>100 size:<10kb
-//   .json
+//   reqheader:user-agent=chromium
+//   reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id
+//   (status:>=400 or duration:>500) and -type:image
 
 const NUMERIC_FIELDS = new Set(['status', 'duration', 'size']);
 const FIELD_ALIASES = {
@@ -34,6 +46,17 @@ const FIELD_ALIASES = {
   duration: 'duration',
   time: 'duration',
   size: 'size'
+};
+
+const HEADER_COOKIE_ALIASES = {
+  reqheader: 'reqHeader',
+  requestheader: 'reqHeader',
+  resheader: 'resHeader',
+  responseheader: 'resHeader',
+  reqcookie: 'reqCookie',
+  requestcookie: 'reqCookie',
+  rescookie: 'resCookie',
+  responsecookie: 'resCookie'
 };
 
 function parseSizeToBytes(value) {
@@ -53,18 +76,23 @@ function parseDurationToMs(value) {
   return unit === 's' ? num * 1000 : num;
 }
 
-// Tokenizes the raw query string into words, respecting "quoted phrases".
-function tokenize(query) {
+// Tokenizes the raw query string into words/parens, respecting "quoted
+// phrases" (exported for testing).
+export function tokenize(query) {
   const tokens = [];
-  const regex = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  const regex = /"([^"]*)"|'([^']*)'|(\()|(\))|([^\s()]+)/g;
   let match;
   while ((match = regex.exec(query)) !== null) {
-    tokens.push(match[1] ?? match[2] ?? match[3]);
+    if (match[1] !== undefined) tokens.push({ type: 'word', value: match[1] });
+    else if (match[2] !== undefined) tokens.push({ type: 'word', value: match[2] });
+    else if (match[3] !== undefined) tokens.push({ type: '(' });
+    else if (match[4] !== undefined) tokens.push({ type: ')' });
+    else tokens.push({ type: 'word', value: match[5] });
   }
   return tokens;
 }
 
-function parseToken(token) {
+function parseLeafClause(token) {
   let negate = false;
   let raw = token;
   if (raw.startsWith('-') && raw.length > 1) {
@@ -74,16 +102,31 @@ function parseToken(token) {
 
   const colonIndex = raw.indexOf(':');
   if (colonIndex === -1) {
-    return { negate, field: null, operator: 'contains', value: raw.toLowerCase() };
+    return { kind: 'plain', negate, value: raw.toLowerCase() };
   }
 
   const rawField = raw.slice(0, colonIndex).toLowerCase();
   let value = raw.slice(colonIndex + 1);
-  const field = FIELD_ALIASES[rawField] || null;
 
+  const hcField = HEADER_COOKIE_ALIASES[rawField];
+  if (hcField) {
+    const eqIndex = value.indexOf('=');
+    if (eqIndex === -1) {
+      return { kind: 'headerCookie', side: hcField, negate, operator: 'exists', name: value.toLowerCase() };
+    }
+    return {
+      kind: 'headerCookie',
+      side: hcField,
+      negate,
+      operator: 'contains',
+      name: value.slice(0, eqIndex).toLowerCase(),
+      value: value.slice(eqIndex + 1)
+    };
+  }
+
+  const field = FIELD_ALIASES[rawField] || null;
   if (!field) {
-    // Unknown field prefix - treat the whole token as plain text.
-    return { negate, field: null, operator: 'contains', value: raw.toLowerCase() };
+    return { kind: 'plain', negate, value: raw.toLowerCase() };
   }
 
   let operator = 'equals';
@@ -92,14 +135,66 @@ function parseToken(token) {
     if (opMatch) {
       operator = opMatch[1];
       value = opMatch[2];
-    } else {
-      operator = 'equals';
     }
   } else {
     operator = 'contains';
   }
 
-  return { negate, field, operator, value };
+  return { kind: 'field', negate, field, operator, value };
+}
+
+// Recursive-descent parser: or < and (implicit or explicit) < not < atom.
+function parseExpr(tokens) {
+  let pos = 0;
+
+  function peek() { return tokens[pos]; }
+  function isKeyword(tok, word) {
+    return tok && tok.type === 'word' && tok.value.toLowerCase() === word;
+  }
+
+  function parseOr() {
+    let left = parseAnd();
+    while (isKeyword(peek(), 'or')) {
+      pos++;
+      const right = parseAnd();
+      left = { type: 'or', left, right };
+    }
+    return left;
+  }
+
+  function parseAnd() {
+    let left = parseNot();
+    while (peek() && peek().type !== ')' && !isKeyword(peek(), 'or')) {
+      if (isKeyword(peek(), 'and')) pos++;
+      const right = parseNot();
+      left = { type: 'and', left, right };
+    }
+    return left;
+  }
+
+  function parseNot() {
+    if (isKeyword(peek(), 'not')) {
+      pos++;
+      return { type: 'not', node: parseNot() };
+    }
+    return parseAtom();
+  }
+
+  function parseAtom() {
+    const tok = peek();
+    if (!tok) return { type: 'clause', clause: { kind: 'plain', negate: false, value: '' } };
+    if (tok.type === '(') {
+      pos++;
+      const node = parseOr();
+      if (peek() && peek().type === ')') pos++;
+      return node;
+    }
+    pos++;
+    return { type: 'clause', clause: parseLeafClause(tok.value) };
+  }
+
+  if (!tokens.length) return null;
+  return parseOr();
 }
 
 function getFieldValue(entry, field) {
@@ -122,13 +217,30 @@ function coerceNumericValue(field, value) {
   return parseFloat(value) || 0;
 }
 
+function getHeaderCookieList(entry, side) {
+  switch (side) {
+    case 'reqHeader': return entry.request.headers || [];
+    case 'resHeader': return entry.response.headers || [];
+    case 'reqCookie': return entry.request.cookies || [];
+    case 'resCookie': return entry.response.cookies || [];
+    default: return [];
+  }
+}
+
 function matchesClause(entry, clause) {
   let matched;
 
-  if (clause.field === null) {
-    // Plain text search across URL + method.
+  if (clause.kind === 'plain') {
     const haystack = `${entry.request.method} ${entry.request.url}`.toLowerCase();
     matched = haystack.includes(clause.value);
+  } else if (clause.kind === 'headerCookie') {
+    const list = getHeaderCookieList(entry, clause.side);
+    if (clause.operator === 'exists') {
+      matched = list.some(h => (h.name || '').toLowerCase() === clause.name);
+    } else {
+      matched = list.some(h => (h.name || '').toLowerCase() === clause.name
+        && (h.value || '').toLowerCase().includes(clause.value.toLowerCase()));
+    }
   } else if (NUMERIC_FIELDS.has(clause.field)) {
     const fieldValue = getFieldValue(entry, clause.field);
     const compareValue = coerceNumericValue(clause.field, clause.value);
@@ -147,15 +259,25 @@ function matchesClause(entry, clause) {
   return clause.negate ? !matched : matched;
 }
 
-// Parses a raw query string into a list of clauses (exported for testing).
+function evaluate(node, entry) {
+  if (!node) return true;
+  switch (node.type) {
+    case 'and': return evaluate(node.left, entry) && evaluate(node.right, entry);
+    case 'or': return evaluate(node.left, entry) || evaluate(node.right, entry);
+    case 'not': return !evaluate(node.node, entry);
+    case 'clause': return matchesClause(entry, node.clause);
+    default: return true;
+  }
+}
+
+// Parses a raw query string into an AST (exported for testing).
 export function parseFilterQuery(query) {
-  return tokenize((query || '').trim()).map(parseToken);
+  return parseExpr(tokenize((query || '').trim()));
 }
 
 // Returns a filtered array of entries matching the given query string.
-// All clauses are combined with AND semantics.
 export function filterEntries(entries, query) {
-  const clauses = parseFilterQuery(query);
-  if (!clauses.length) return entries;
-  return entries.filter(entry => clauses.every(clause => matchesClause(entry, clause)));
+  const ast = parseFilterQuery(query);
+  if (!ast) return entries;
+  return entries.filter(entry => evaluate(ast, entry));
 }

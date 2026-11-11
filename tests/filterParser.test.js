@@ -67,4 +67,41 @@ describe('filterEntries', () => {
     const result = filterEntries(entries, 'logo');
     expect(result.map(e => e.id)).toEqual([2]);
   });
+
+  it('supports or and grouping', () => {
+    const result = filterEntries(entries, '(status:404 or type:image)');
+    expect(result.map(e => e.id)).toEqual([1, 2]);
+  });
+
+  it('supports not keyword', () => {
+    const result = filterEntries(entries, 'not type:image');
+    expect(result.map(e => e.id)).toEqual([0, 1]);
+  });
+
+  it('matches a request header value', () => {
+    const withHeaders = entries.map(e => ({
+      ...e,
+      request: { ...e.request, headers: e.id === 1 ? [{ name: 'user-agent', value: 'Chromium/1.0' }] : [] }
+    }));
+    const result = filterEntries(withHeaders, 'reqheader:user-agent=chromium');
+    expect(result.map(e => e.id)).toEqual([1]);
+  });
+
+  it('checks for response header presence without a value', () => {
+    const withHeaders = entries.map(e => ({
+      ...e,
+      response: { ...e.response, headers: e.id === 2 ? [{ name: 'x-execution-id', value: 'ADFEEx01' }] : [] }
+    }));
+    const result = filterEntries(withHeaders, 'resheader:x-execution-id');
+    expect(result.map(e => e.id)).toEqual([2]);
+  });
+
+  it('matches cookies and combines with and/or', () => {
+    const withCookies = entries.map(e => ({
+      ...e,
+      request: { ...e.request, cookies: e.id === 0 ? [{ name: 'sid', value: 'abc' }] : [] }
+    }));
+    const result = filterEntries(withCookies, 'reqcookie:sid=abc or status:404');
+    expect(result.map(e => e.id)).toEqual([0, 1]);
+  });
 });

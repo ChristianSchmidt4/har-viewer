@@ -36,7 +36,10 @@ export class RequestTable {
   }
 
   bindEvents() {
-    this.filterInputEl.addEventListener('input', () => this.applyFilter());
+    this.filterInputEl.addEventListener('input', () => {
+      clearTimeout(this.filterDebounceTimer);
+      this.filterDebounceTimer = setTimeout(() => this.applyFilter(), 250);
+    });
 
     // Toggle the filter syntax hint on focus for discoverability.
     this.filterInputEl.addEventListener('focus', () => {

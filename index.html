@@ -42,9 +42,19 @@
                         <div id="filter-hint" class="filter-hint">
                             Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
                             <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
-                            <code>duration</code>, <code>size</code> · prefix <code>-</code> to negate ·
+                            <code>duration</code>, <code>size</code> · prefix <code>-</code> or <code>not</code> to negate ·
                             numeric fields support <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> ·
-                            plain text matches the URL
+                            combine with <code>and</code> / <code>or</code> / <code>(...)</code> ·
+                            <code>reqheader:name=value</code>, <code>resheader:name=value</code>,
+                            <code>reqcookie:name=value</code>, <code>rescookie:name=value</code> (omit
+                            <code>=value</code> to just check presence) · plain text matches the URL
+                            <br />
+                            Examples: <code>status:200 method:GET</code> ·
+                            <code>duration:&gt;100 size:&lt;10kb</code> ·
+                            <code>(status:&gt;=400 or duration:&gt;500) and -type:image</code> ·
+                            <code>reqheader:user-agent=chromium</code> ·
+                            <code>reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id</code> ·
+                            <code>rescookie:track and status:200</code>
                         </div>
                     </div>
                     <div class="request-table-scroll">

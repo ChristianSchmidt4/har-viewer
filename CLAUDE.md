@@ -31,10 +31,10 @@ server and production build only ever serve static files.
    file looks like a `.har`/JSON file, then hands the raw `File` object back
    via `onFileSelected`.
 2. **RequestTable** (`RequestTable.js`) - Left-pane filterable table. Owns
-   the filter input, re-filters on every keystroke via `filterParser`, and
-   renders rows with columns: index, response code, protocol, host, path,
-   body size, content-type, duration, and relative start time. Emits
-   `onSelect(entry)` when a row is clicked.
+   the filter input, debounces keystrokes 250ms before re-filtering via
+   `filterParser`, and renders rows with columns: index, response code,
+   protocol, host, path, body size, content-type, duration, and relative
+   start time. Emits `onSelect(entry)` when a row is clicked.
 3. **DetailPanel** (`DetailPanel.js`) - Right-pane detail view. Splits into
    a Request side and a Response side, each with independent Headers / Raw
    / Cookies / Syntax sub-tabs (state remembered per side across selections).
@@ -81,15 +81,39 @@ pure static site (`npm run build` → static `dist/`, servable by any static
 file server).
 
 ### Filter Query Syntax (`filterParser.js`)
-Space-separated clauses, ANDed together:
+Parsed by a tokenizer + recursive-descent parser into an AST
+(`parseFilterQuery` returns the AST; `filterEntries` evaluates it per entry).
+Clauses with no explicit operator between them are ANDed.
+
 - `field:value` — known fields: `method`, `status`/`code`, `host`/`domain`,
   `path`, `protocol`/`proto`, `type`/`mime`, `duration`/`time`, `size`
-- `-field:value` — negates the clause
+- `-field:value` or `not field:value` — negates the clause
 - Numeric fields (`status`, `duration`, `size`) support `>`, `<`, `>=`, `<=`
   (e.g. `duration:>100`, `size:<10kb`)
+- `and` / `or` / `(...)` — logical combinators and grouping; precedence is
+  `not` > `and` > `or`, and adjacent clauses with no keyword default to `and`
+- `reqheader:name=value` / `resheader:name=value` — request/response header
+  `name` contains `value` (case-insensitive)
+- `reqcookie:name=value` / `rescookie:name=value` — request/response cookie
+  `name` contains `value`
+- `reqheader:name` / `resheader:name` / `reqcookie:name` / `rescookie:name`
+  (no `=value`) — checks the header/cookie is present, regardless of value
 - Plain text with no `field:` prefix matches against the request method + URL
 - Unknown field prefixes degrade gracefully to a plain-text match (the
   filter never throws on bad input)
+
+Examples:
+- `status:200 method:GET` — AND of two field clauses
+- `host:example.com -type:image` — negated clause
+- `duration:>100 size:<10kb` — numeric comparisons with unit suffixes
+- `(status:>=400 or duration:>500) and -type:image` — grouping with AND/OR
+- `not host:cdn.example.com` — keyword negation
+- `reqheader:user-agent=chromium` — request header value match
+- `reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id` — header
+  value match OR’d with a presence-only check
+- `reqcookie:session=abc123` — request cookie value match
+- `rescookie:track and status:200` — response cookie presence/value AND’d
+  with a field clause
 
 ### Styling Approach
 Uses CSS custom properties (`:root` in `main.css`) for consistent theming.
@@ -107,6 +131,12 @@ panes stack vertically under 900px width.
 1. Add the field to `FIELD_ALIASES` in `filterParser.js` (and to
    `NUMERIC_FIELDS` if it's a number)
 2. Add a case for it in `getFieldValue` in the same file
+3. Update the hint text in `index.html`'s `#filter-hint`
+
+### Adding a Header/Cookie-Style Filter Prefix
+1. Add the prefix to `HEADER_COOKIE_ALIASES` in `filterParser.js`, mapping
+   it to a `side` key
+2. Add a case for that `side` in `getHeaderCookieList` in the same file
 3. Update the hint text in `index.html`'s `#filter-hint`
 
 ### Adding a Sub-Tab to the Detail Panel
