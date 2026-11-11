@@ -1,6 +1,7 @@
 import { HarParser } from './utils/harParser.js';
 import { FileDropZone } from './components/FileDropZone.js';
 import { RequestTable } from './components/RequestTable.js';
+import { HighlightBar } from './components/HighlightBar.js';
 import { DetailPanel } from './components/DetailPanel.js';
 import { makeResizer } from './utils/resizer.js';
 import { loadCustomColumns, saveCustomColumns, addCustomColumn, removeCustomColumn } from './utils/customColumns.js';
@@ -48,6 +49,10 @@ class HarViewerApp {
     });
 
     this.detailPanel = new DetailPanel();
+
+    new HighlightBar({
+      onChange: (rules) => this.requestTable.setHighlightRules(rules)
+    });
 
     this.init();
   }

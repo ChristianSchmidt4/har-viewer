@@ -9,6 +9,11 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   alternative to dropping a file
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
+- Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
+  (e.g. `status:>=400 => red fire`; the action defaults to `add`) color, tag or
+  restyle matching rows with any CSS named color (`red`, `lightblue`, ...),
+  a symbol emoji (`fire`, `warning`, `lock`, ...) or text style (`bold`,
+  `italic`, `underline`, `strikethrough`); rules are applied in order and are not persisted
 - Split Request / Response detail view, each with **Headers**, **Raw**,
   **Cookies** and **Syntax** (highlighted body) tabs; image responses get an
   **Image** preview tab and font responses a **Font** tab (renders the
@@ -33,10 +38,12 @@ har_viewer/
 │   ├── components/
 │   │   ├── FileDropZone.js   # Drag & drop / file-picker landing screen
 │   │   ├── RequestTable.js   # Filterable request list (left pane)
+│   │   ├── HighlightBar.js   # Highlight rule input below the request list
 │   │   └── DetailPanel.js    # Request/Response detail view (right pane)
 │   ├── utils/
 │   │   ├── harParser.js      # HAR JSON -> structured entries
 │   │   ├── filterParser.js   # Request-table filter query engine
+│   │   ├── highlightRules.js # Highlight rule parsing, color/emoji classes
 │   │   ├── httpFormatter.js  # Raw HTTP text + syntax highlighting
 │   │   └── domUtils.js       # Shared DOM/string helpers
 │   ├── styles/

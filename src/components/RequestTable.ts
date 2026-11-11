@@ -9,8 +9,10 @@ import { HarParser } from '../utils/harParser.js';
 import { filterEntries } from '../utils/filterParser.js';
 import { escapeHtml, truncateText } from '../utils/domUtils.js';
 import { evaluateCustomColumn } from '../utils/customColumns.js';
+import { computeHighlightClasses, highlightClassName, HIGHLIGHT_EMOJIS } from '../utils/highlightRules.js';
 import type { ParsedEntry } from '../types/har.js';
 import type { CustomColumn } from '../utils/customColumns.js';
+import type { HighlightRule } from '../utils/highlightRules.js';
 
 interface Column {
   key: string;
@@ -53,6 +55,7 @@ export class RequestTable {
   private theadEl: HTMLElement;
 
   private customColumns: CustomColumn[];
+  private highlightRules: HighlightRule[];
 
   private onCustomColumnRemove?: (columnId: string) => void;
 
@@ -67,6 +70,7 @@ export class RequestTable {
     this.selectedEntryIds = new Set();
     this.lastSelectedEntryId = null;
     this.customColumns = [];
+    this.highlightRules = [];
 
     this.filterInputEl = document.getElementById('request-filter') as HTMLInputElement;
     this.filterHintEl = document.getElementById('filter-hint')!;
@@ -136,6 +140,12 @@ export class RequestTable {
     return this.customColumns;
   }
 
+  // Replaces the highlight rules and re-renders so row classes are updated.
+  setHighlightRules(rules: HighlightRule[]): void {
+    this.highlightRules = rules;
+    this.render();
+  }
+
   // Returns the entries currently passing the filter (same objects as
   // allEntries, so entry.id maps back to the original HAR entry index).
   getVisibleEntries(): ParsedEntry[] {
@@ -179,6 +189,14 @@ export class RequestTable {
       row.classList.add('selected');
     }
 
+    const highlightClasses = computeHighlightClasses(this.highlightRules, entry);
+    highlightClasses.forEach(cls => row.classList.add(highlightClassName(cls)));
+    const emojis = highlightClasses.flatMap(cls => {
+      const emoji = HIGHLIGHT_EMOJIS[cls];
+      return emoji ? [emoji] : [];
+    });
+    const emojiPrefix = emojis.length ? `<span class="hl-emoji">${emojis.join('')}</span>` : '';
+
     const status = entry.response.status;
     const statusClass = status >= 200 && status < 300 ? 'status-success'
       : status >= 400 ? 'status-error'
@@ -195,7 +213,7 @@ export class RequestTable {
     }).join('');
 
     row.innerHTML = `
-      <td class="col-index">${entry.id + 1}</td>
+      <td class="col-index">${emojiPrefix}${entry.id + 1}</td>
       <td class="col-status ${statusClass}">${status || '—'}</td>
       <td class="col-protocol">${escapeHtml(entry.protocol)}</td>
       <td class="col-host" title="${escapeHtml(entry.host)}">${escapeHtml(entry.host)}</td>

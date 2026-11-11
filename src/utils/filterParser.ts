@@ -313,6 +313,12 @@ export function parseFilterQuery(query: string): AstNode | null {
   return parseExpr(tokenize((query || '').trim()));
 }
 
+// Compiles a query once into a reusable per-entry predicate.
+export function compileFilterQuery(query: string): (entry: ParsedEntry) => boolean {
+  const ast = parseFilterQuery(query);
+  return entry => evaluate(ast, entry);
+}
+
 // Returns a filtered array of entries matching the given query string.
 export function filterEntries(entries: ParsedEntry[], query: string): ParsedEntry[] {
   const ast = parseFilterQuery(query);

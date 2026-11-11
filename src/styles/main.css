@@ -290,11 +290,127 @@ button:hover {
   opacity: 1;
 }
 
+.filter-hint.hint-above {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 0.25rem;
+}
+
+/* Highlight bar (below the request table) */
+
+.highlight-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
+  background-color: var(--light-gray);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.highlight-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#highlight-input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-family: var(--mono-font);
+}
+
+#highlight-input:focus {
+  outline: none;
+  border-color: var(--secondary-color);
+}
+
+.highlight-error {
+  font-size: 0.78rem;
+  color: var(--error-color);
+  opacity: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+  transition: opacity 0.15s;
+}
+
+.highlight-error.visible {
+  opacity: 1;
+}
+
+.highlight-rules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.highlight-rules:empty {
+  display: none;
+}
+
+.highlight-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.15rem 0.3rem 0.15rem 0.6rem;
+  background-color: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-family: var(--mono-font);
+}
+
+.highlight-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.highlight-chip-remove {
+  padding: 0 0.35rem;
+  border: none;
+  background: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--dark-gray);
+}
+
+.highlight-chip-remove:hover {
+  background: none;
+  color: var(--error-color);
+}
+
+.hl-emoji {
+  margin-right: 0.25rem;
+}
+
 .filter-hint code {
   background-color: rgba(255, 255, 255, 0.15);
   padding: 0.05rem 0.3rem;
   border-radius: 3px;
   font-family: var(--mono-font);
+}
+
+.hint-above > div {
+  margin-bottom: 0.35rem;
+}
+
+.hint-above > div:last-child {
+  margin-bottom: 0;
+}
+
+.hint-above b {
+  display: inline-block;
+  min-width: 4.5rem;
+  color: #fff;
 }
 
 /* Two-pane layout */
@@ -401,6 +517,163 @@ body.resizing-vertical * {
 #requests-table tbody tr {
   cursor: pointer;
 }
+
+/* Highlight rule colors: one class per CSS named color (see NAMED_COLORS in
+   src/utils/highlightRules.ts). Placed before :hover/.selected so selection
+   stays visible on highlighted rows. */
+#requests-table tbody tr.hl-aliceblue { background-color: color-mix(in srgb, aliceblue 35%, white); }
+#requests-table tbody tr.hl-antiquewhite { background-color: color-mix(in srgb, antiquewhite 35%, white); }
+#requests-table tbody tr.hl-aqua { background-color: color-mix(in srgb, aqua 35%, white); }
+#requests-table tbody tr.hl-aquamarine { background-color: color-mix(in srgb, aquamarine 35%, white); }
+#requests-table tbody tr.hl-azure { background-color: color-mix(in srgb, azure 35%, white); }
+#requests-table tbody tr.hl-beige { background-color: color-mix(in srgb, beige 35%, white); }
+#requests-table tbody tr.hl-bisque { background-color: color-mix(in srgb, bisque 35%, white); }
+#requests-table tbody tr.hl-black { background-color: color-mix(in srgb, black 35%, white); }
+#requests-table tbody tr.hl-blanchedalmond { background-color: color-mix(in srgb, blanchedalmond 35%, white); }
+#requests-table tbody tr.hl-blue { background-color: color-mix(in srgb, blue 35%, white); }
+#requests-table tbody tr.hl-blueviolet { background-color: color-mix(in srgb, blueviolet 35%, white); }
+#requests-table tbody tr.hl-brown { background-color: color-mix(in srgb, brown 35%, white); }
+#requests-table tbody tr.hl-burlywood { background-color: color-mix(in srgb, burlywood 35%, white); }
+#requests-table tbody tr.hl-cadetblue { background-color: color-mix(in srgb, cadetblue 35%, white); }
+#requests-table tbody tr.hl-chartreuse { background-color: color-mix(in srgb, chartreuse 35%, white); }
+#requests-table tbody tr.hl-chocolate { background-color: color-mix(in srgb, chocolate 35%, white); }
+#requests-table tbody tr.hl-coral { background-color: color-mix(in srgb, coral 35%, white); }
+#requests-table tbody tr.hl-cornflowerblue { background-color: color-mix(in srgb, cornflowerblue 35%, white); }
+#requests-table tbody tr.hl-cornsilk { background-color: color-mix(in srgb, cornsilk 35%, white); }
+#requests-table tbody tr.hl-crimson { background-color: color-mix(in srgb, crimson 35%, white); }
+#requests-table tbody tr.hl-cyan { background-color: color-mix(in srgb, cyan 35%, white); }
+#requests-table tbody tr.hl-darkblue { background-color: color-mix(in srgb, darkblue 35%, white); }
+#requests-table tbody tr.hl-darkcyan { background-color: color-mix(in srgb, darkcyan 35%, white); }
+#requests-table tbody tr.hl-darkgoldenrod { background-color: color-mix(in srgb, darkgoldenrod 35%, white); }
+#requests-table tbody tr.hl-darkgray { background-color: color-mix(in srgb, darkgray 35%, white); }
+#requests-table tbody tr.hl-darkgreen { background-color: color-mix(in srgb, darkgreen 35%, white); }
+#requests-table tbody tr.hl-darkgrey { background-color: color-mix(in srgb, darkgrey 35%, white); }
+#requests-table tbody tr.hl-darkkhaki { background-color: color-mix(in srgb, darkkhaki 35%, white); }
+#requests-table tbody tr.hl-darkmagenta { background-color: color-mix(in srgb, darkmagenta 35%, white); }
+#requests-table tbody tr.hl-darkolivegreen { background-color: color-mix(in srgb, darkolivegreen 35%, white); }
+#requests-table tbody tr.hl-darkorange { background-color: color-mix(in srgb, darkorange 35%, white); }
+#requests-table tbody tr.hl-darkorchid { background-color: color-mix(in srgb, darkorchid 35%, white); }
+#requests-table tbody tr.hl-darkred { background-color: color-mix(in srgb, darkred 35%, white); }
+#requests-table tbody tr.hl-darksalmon { background-color: color-mix(in srgb, darksalmon 35%, white); }
+#requests-table tbody tr.hl-darkseagreen { background-color: color-mix(in srgb, darkseagreen 35%, white); }
+#requests-table tbody tr.hl-darkslateblue { background-color: color-mix(in srgb, darkslateblue 35%, white); }
+#requests-table tbody tr.hl-darkslategray { background-color: color-mix(in srgb, darkslategray 35%, white); }
+#requests-table tbody tr.hl-darkslategrey { background-color: color-mix(in srgb, darkslategrey 35%, white); }
+#requests-table tbody tr.hl-darkturquoise { background-color: color-mix(in srgb, darkturquoise 35%, white); }
+#requests-table tbody tr.hl-darkviolet { background-color: color-mix(in srgb, darkviolet 35%, white); }
+#requests-table tbody tr.hl-deeppink { background-color: color-mix(in srgb, deeppink 35%, white); }
+#requests-table tbody tr.hl-deepskyblue { background-color: color-mix(in srgb, deepskyblue 35%, white); }
+#requests-table tbody tr.hl-dimgray { background-color: color-mix(in srgb, dimgray 35%, white); }
+#requests-table tbody tr.hl-dimgrey { background-color: color-mix(in srgb, dimgrey 35%, white); }
+#requests-table tbody tr.hl-dodgerblue { background-color: color-mix(in srgb, dodgerblue 35%, white); }
+#requests-table tbody tr.hl-firebrick { background-color: color-mix(in srgb, firebrick 35%, white); }
+#requests-table tbody tr.hl-floralwhite { background-color: color-mix(in srgb, floralwhite 35%, white); }
+#requests-table tbody tr.hl-forestgreen { background-color: color-mix(in srgb, forestgreen 35%, white); }
+#requests-table tbody tr.hl-fuchsia { background-color: color-mix(in srgb, fuchsia 35%, white); }
+#requests-table tbody tr.hl-gainsboro { background-color: color-mix(in srgb, gainsboro 35%, white); }
+#requests-table tbody tr.hl-ghostwhite { background-color: color-mix(in srgb, ghostwhite 35%, white); }
+#requests-table tbody tr.hl-gold { background-color: color-mix(in srgb, gold 35%, white); }
+#requests-table tbody tr.hl-goldenrod { background-color: color-mix(in srgb, goldenrod 35%, white); }
+#requests-table tbody tr.hl-gray { background-color: color-mix(in srgb, gray 35%, white); }
+#requests-table tbody tr.hl-green { background-color: color-mix(in srgb, green 35%, white); }
+#requests-table tbody tr.hl-greenyellow { background-color: color-mix(in srgb, greenyellow 35%, white); }
+#requests-table tbody tr.hl-grey { background-color: color-mix(in srgb, grey 35%, white); }
+#requests-table tbody tr.hl-honeydew { background-color: color-mix(in srgb, honeydew 35%, white); }
+#requests-table tbody tr.hl-hotpink { background-color: color-mix(in srgb, hotpink 35%, white); }
+#requests-table tbody tr.hl-indianred { background-color: color-mix(in srgb, indianred 35%, white); }
+#requests-table tbody tr.hl-indigo { background-color: color-mix(in srgb, indigo 35%, white); }
+#requests-table tbody tr.hl-ivory { background-color: color-mix(in srgb, ivory 35%, white); }
+#requests-table tbody tr.hl-khaki { background-color: color-mix(in srgb, khaki 35%, white); }
+#requests-table tbody tr.hl-lavender { background-color: color-mix(in srgb, lavender 35%, white); }
+#requests-table tbody tr.hl-lavenderblush { background-color: color-mix(in srgb, lavenderblush 35%, white); }
+#requests-table tbody tr.hl-lawngreen { background-color: color-mix(in srgb, lawngreen 35%, white); }
+#requests-table tbody tr.hl-lemonchiffon { background-color: color-mix(in srgb, lemonchiffon 35%, white); }
+#requests-table tbody tr.hl-lightblue { background-color: color-mix(in srgb, lightblue 35%, white); }
+#requests-table tbody tr.hl-lightcoral { background-color: color-mix(in srgb, lightcoral 35%, white); }
+#requests-table tbody tr.hl-lightcyan { background-color: color-mix(in srgb, lightcyan 35%, white); }
+#requests-table tbody tr.hl-lightgoldenrodyellow { background-color: color-mix(in srgb, lightgoldenrodyellow 35%, white); }
+#requests-table tbody tr.hl-lightgray { background-color: color-mix(in srgb, lightgray 35%, white); }
+#requests-table tbody tr.hl-lightgreen { background-color: color-mix(in srgb, lightgreen 35%, white); }
+#requests-table tbody tr.hl-lightgrey { background-color: color-mix(in srgb, lightgrey 35%, white); }
+#requests-table tbody tr.hl-lightpink { background-color: color-mix(in srgb, lightpink 35%, white); }
+#requests-table tbody tr.hl-lightsalmon { background-color: color-mix(in srgb, lightsalmon 35%, white); }
+#requests-table tbody tr.hl-lightseagreen { background-color: color-mix(in srgb, lightseagreen 35%, white); }
+#requests-table tbody tr.hl-lightskyblue { background-color: color-mix(in srgb, lightskyblue 35%, white); }
+#requests-table tbody tr.hl-lightslategray { background-color: color-mix(in srgb, lightslategray 35%, white); }
+#requests-table tbody tr.hl-lightslategrey { background-color: color-mix(in srgb, lightslategrey 35%, white); }
+#requests-table tbody tr.hl-lightsteelblue { background-color: color-mix(in srgb, lightsteelblue 35%, white); }
+#requests-table tbody tr.hl-lightyellow { background-color: color-mix(in srgb, lightyellow 35%, white); }
+#requests-table tbody tr.hl-lime { background-color: color-mix(in srgb, lime 35%, white); }
+#requests-table tbody tr.hl-limegreen { background-color: color-mix(in srgb, limegreen 35%, white); }
+#requests-table tbody tr.hl-linen { background-color: color-mix(in srgb, linen 35%, white); }
+#requests-table tbody tr.hl-magenta { background-color: color-mix(in srgb, magenta 35%, white); }
+#requests-table tbody tr.hl-maroon { background-color: color-mix(in srgb, maroon 35%, white); }
+#requests-table tbody tr.hl-mediumaquamarine { background-color: color-mix(in srgb, mediumaquamarine 35%, white); }
+#requests-table tbody tr.hl-mediumblue { background-color: color-mix(in srgb, mediumblue 35%, white); }
+#requests-table tbody tr.hl-mediumorchid { background-color: color-mix(in srgb, mediumorchid 35%, white); }
+#requests-table tbody tr.hl-mediumpurple { background-color: color-mix(in srgb, mediumpurple 35%, white); }
+#requests-table tbody tr.hl-mediumseagreen { background-color: color-mix(in srgb, mediumseagreen 35%, white); }
+#requests-table tbody tr.hl-mediumslateblue { background-color: color-mix(in srgb, mediumslateblue 35%, white); }
+#requests-table tbody tr.hl-mediumspringgreen { background-color: color-mix(in srgb, mediumspringgreen 35%, white); }
+#requests-table tbody tr.hl-mediumturquoise { background-color: color-mix(in srgb, mediumturquoise 35%, white); }
+#requests-table tbody tr.hl-mediumvioletred { background-color: color-mix(in srgb, mediumvioletred 35%, white); }
+#requests-table tbody tr.hl-midnightblue { background-color: color-mix(in srgb, midnightblue 35%, white); }
+#requests-table tbody tr.hl-mintcream { background-color: color-mix(in srgb, mintcream 35%, white); }
+#requests-table tbody tr.hl-mistyrose { background-color: color-mix(in srgb, mistyrose 35%, white); }
+#requests-table tbody tr.hl-moccasin { background-color: color-mix(in srgb, moccasin 35%, white); }
+#requests-table tbody tr.hl-navajowhite { background-color: color-mix(in srgb, navajowhite 35%, white); }
+#requests-table tbody tr.hl-navy { background-color: color-mix(in srgb, navy 35%, white); }
+#requests-table tbody tr.hl-oldlace { background-color: color-mix(in srgb, oldlace 35%, white); }
+#requests-table tbody tr.hl-olive { background-color: color-mix(in srgb, olive 35%, white); }
+#requests-table tbody tr.hl-olivedrab { background-color: color-mix(in srgb, olivedrab 35%, white); }
+#requests-table tbody tr.hl-orange { background-color: color-mix(in srgb, orange 35%, white); }
+#requests-table tbody tr.hl-orangered { background-color: color-mix(in srgb, orangered 35%, white); }
+#requests-table tbody tr.hl-orchid { background-color: color-mix(in srgb, orchid 35%, white); }
+#requests-table tbody tr.hl-palegoldenrod { background-color: color-mix(in srgb, palegoldenrod 35%, white); }
+#requests-table tbody tr.hl-palegreen { background-color: color-mix(in srgb, palegreen 35%, white); }
+#requests-table tbody tr.hl-paleturquoise { background-color: color-mix(in srgb, paleturquoise 35%, white); }
+#requests-table tbody tr.hl-palevioletred { background-color: color-mix(in srgb, palevioletred 35%, white); }
+#requests-table tbody tr.hl-papayawhip { background-color: color-mix(in srgb, papayawhip 35%, white); }
+#requests-table tbody tr.hl-peachpuff { background-color: color-mix(in srgb, peachpuff 35%, white); }
+#requests-table tbody tr.hl-peru { background-color: color-mix(in srgb, peru 35%, white); }
+#requests-table tbody tr.hl-pink { background-color: color-mix(in srgb, pink 35%, white); }
+#requests-table tbody tr.hl-plum { background-color: color-mix(in srgb, plum 35%, white); }
+#requests-table tbody tr.hl-powderblue { background-color: color-mix(in srgb, powderblue 35%, white); }
+#requests-table tbody tr.hl-purple { background-color: color-mix(in srgb, purple 35%, white); }
+#requests-table tbody tr.hl-rebeccapurple { background-color: color-mix(in srgb, rebeccapurple 35%, white); }
+#requests-table tbody tr.hl-red { background-color: color-mix(in srgb, red 35%, white); }
+#requests-table tbody tr.hl-rosybrown { background-color: color-mix(in srgb, rosybrown 35%, white); }
+#requests-table tbody tr.hl-royalblue { background-color: color-mix(in srgb, royalblue 35%, white); }
+#requests-table tbody tr.hl-saddlebrown { background-color: color-mix(in srgb, saddlebrown 35%, white); }
+#requests-table tbody tr.hl-salmon { background-color: color-mix(in srgb, salmon 35%, white); }
+#requests-table tbody tr.hl-sandybrown { background-color: color-mix(in srgb, sandybrown 35%, white); }
+#requests-table tbody tr.hl-seagreen { background-color: color-mix(in srgb, seagreen 35%, white); }
+#requests-table tbody tr.hl-seashell { background-color: color-mix(in srgb, seashell 35%, white); }
+#requests-table tbody tr.hl-sienna { background-color: color-mix(in srgb, sienna 35%, white); }
+#requests-table tbody tr.hl-silver { background-color: color-mix(in srgb, silver 35%, white); }
+#requests-table tbody tr.hl-skyblue { background-color: color-mix(in srgb, skyblue 35%, white); }
+#requests-table tbody tr.hl-slateblue { background-color: color-mix(in srgb, slateblue 35%, white); }
+#requests-table tbody tr.hl-slategray { background-color: color-mix(in srgb, slategray 35%, white); }
+#requests-table tbody tr.hl-slategrey { background-color: color-mix(in srgb, slategrey 35%, white); }
+#requests-table tbody tr.hl-snow { background-color: color-mix(in srgb, snow 35%, white); }
+#requests-table tbody tr.hl-springgreen { background-color: color-mix(in srgb, springgreen 35%, white); }
+#requests-table tbody tr.hl-steelblue { background-color: color-mix(in srgb, steelblue 35%, white); }
+#requests-table tbody tr.hl-tan { background-color: color-mix(in srgb, tan 35%, white); }
+#requests-table tbody tr.hl-teal { background-color: color-mix(in srgb, teal 35%, white); }
+#requests-table tbody tr.hl-thistle { background-color: color-mix(in srgb, thistle 35%, white); }
+#requests-table tbody tr.hl-tomato { background-color: color-mix(in srgb, tomato 35%, white); }
+#requests-table tbody tr.hl-turquoise { background-color: color-mix(in srgb, turquoise 35%, white); }
+#requests-table tbody tr.hl-violet { background-color: color-mix(in srgb, violet 35%, white); }
+#requests-table tbody tr.hl-wheat { background-color: color-mix(in srgb, wheat 35%, white); }
+#requests-table tbody tr.hl-bold { font-weight: bold; }
+#requests-table tbody tr.hl-italic { font-style: italic; }
+#requests-table tbody tr.hl-underline td { text-decoration: underline; }
+#requests-table tbody tr.hl-strikethrough td { text-decoration: line-through; }
+#requests-table tbody tr.hl-underline.hl-strikethrough td { text-decoration: underline line-through; }
+#requests-table tbody tr.hl-white { background-color: color-mix(in srgb, white 35%, black); }
+#requests-table tbody tr.hl-whitesmoke { background-color: color-mix(in srgb, whitesmoke 35%, white); }
+#requests-table tbody tr.hl-yellow { background-color: color-mix(in srgb, yellow 35%, white); }
+#requests-table tbody tr.hl-yellowgreen { background-color: color-mix(in srgb, yellowgreen 35%, white); }
 
 #requests-table tbody tr:hover {
   background-color: rgba(52, 152, 219, 0.08);
