@@ -27,7 +27,14 @@ class HarViewerApp {
     });
 
     this.requestTable = new RequestTable({
-      onSelect: (entry) => this.detailPanel.render(entry)
+      onSelect: (entry) => this.detailPanel.render(entry),
+      onMultiSelect: (entries) => {
+        if (entries.length === 0) {
+          this.detailPanel.showEmptyState();
+        } else {
+          this.detailPanel.renderMultiSelect(entries);
+        }
+      }
     });
 
     this.detailPanel = new DetailPanel();

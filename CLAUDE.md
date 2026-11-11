@@ -33,10 +33,13 @@ is needed for development. See [TypeScript](#typescript) below.
 
 ### Utilities (`src/utils/`)
 1. **HarParser** (`harParser.ts`) - Parses HAR JSON into structured entries;
-   also derives `host`, `path`, `protocol`, `contentType` and
-   `relativeStartMs` (time since the first request in the archive) per
-   entry, and provides `formatBytes` / `formatTime` / `formatRelativeTime` /
-   `formatDateTime`.
+   also derives `host`, `path`, `protocol`, `contentType`, `relativeStartMs`
+   (time since the first request in the archive) and normalized `timings`
+   (`blocked`/`dns`/`connect`/`ssl`/`send`/`wait`/`receive`, with HAR's `-1`
+   "not applicable" sentinel normalized to `0`) per entry. Provides
+   `formatBytes` / `formatTime` / `formatRelativeTime` / `formatDateTime` /
+   `formatClockTime` (`HH:MM:SS.mmm`) / `formatDurationClock` (`HH:MM:SS.mmm`
+   duration, used by the aggregate Stats panel).
 2. **filterParser** (`filterParser.ts`) - Parses and applies the request
    table's filter query syntax (`parseFilterQuery`, `filterEntries`).
 3. **httpFormatter** (`httpFormatter.ts`) - Builds raw wire-format HTTP text
@@ -44,13 +47,19 @@ is needed for development. See [TypeScript](#typescript) below.
    highlighting (`highlightSyntax`) for the detail panel's Raw/Syntax tabs.
 4. **domUtils** (`domUtils.ts`) - Shared `escapeHtml`, `truncateUrl`,
    `truncateText` helpers.
+5. **aggregateStats** (`aggregateStats.ts`) - `computeAggregateStats(entries)`
+   reduces a set of entries into request count, bytes sent/received (split
+   into headers/body), start/end timestamps, sequence vs. aggregate session
+   duration, response code tally, and response bytes by content-type - the
+   data behind the multi-select detail panel's Stats tab.
 
 ### Types (`src/types/`)
 - **har.ts** - Shared TypeScript interfaces for the raw HAR 1.2 JSON shape
-  (`HarData`, `HarEntryRaw`, `HarRequestRaw`, `HarResponseRaw`, ...) and the
-  structured shape `HarParser` produces (`ParsedHar`, `ParsedEntry`,
-  `ParsedRequest`, `ParsedResponse`, ...). Import `ParsedEntry` whenever you
-  need the type of an entry flowing through the table/filter/detail panel.
+  (`HarData`, `HarEntryRaw`, `HarRequestRaw`, `HarResponseRaw`,
+  `HarTimingsRaw`, ...) and the structured shape `HarParser` produces
+  (`ParsedHar`, `ParsedEntry`, `ParsedRequest`, `ParsedResponse`,
+  `ParsedTimings`, ...). Import `ParsedEntry` whenever you need the type of
+  an entry flowing through the table/filter/detail panel.
 
 ### Components (`src/components/`)
 1. **FileDropZone** (`FileDropZone.ts`) - The landing screen: drag-and-drop
@@ -61,19 +70,55 @@ is needed for development. See [TypeScript](#typescript) below.
    the filter input, debounces keystrokes 250ms before re-filtering via
    `filterParser`, and renders rows with columns: index, response code,
    protocol, host, path, body size, content-type, duration, and relative
-   start time. Emits `onSelect(entry)` when a row is clicked. Exposes
-   `getVisibleEntries()` so other components (e.g. the Export button in
-   `index.ts`) can get the currently filtered-in entries.
-3. **DetailPanel** (`DetailPanel.ts`) - Right-pane detail view. Splits into
-   a Request side and a Response side, each with independent Headers / Raw
-   / Cookies / Syntax sub-tabs (state remembered per side across selections).
+   start time. Supports multi-select: plain click selects one row
+   (`onSelect(entry)`), Ctrl/Cmd-click toggles a row in/out of the selection,
+   and Shift-click selects the range from the last-touched row; 0 or 1
+   selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
+   `onMultiSelect(entries)`. Exposes `getVisibleEntries()` so other
+   components (e.g. the Export button in `index.ts`) can get the currently
+   filtered-in entries.
+3. **DetailPanel** (`DetailPanel.ts`) - Right-pane detail view with two
+   modes: `render(entry)` for a single selected request (Request/Response
+   sides, each with independent Headers / Raw / Cookies / Syntax sub-tabs,
+   state remembered per side across selections), and
+   `renderMultiSelect(entries)` for 2+ selected requests, which replaces the
+   Request/Response layout with an aggregate view with **Timeline** and
+   **Stats** tabs (state remembered in `activeAggregateTab`):
+   - **Timeline**: a waterfall - one row per request, a track showing each
+     request positioned/sized by its absolute start time and duration
+     within the selection's time range, segmented by the Fiddler-style
+     timing phases (blocked/DNS/connect/SSL/send/wait/receive;  see
+     https://www.telerik.com/fiddler/fiddler-classic/documentation/knowledge-base/timeline).
+     Requests with no phase timings (all zero) fall back to a single "Wait"
+     segment sized to the request's total time. The x-axis shows absolute
+     clock time (`HarParser.formatClockTime`) at the start/end and evenly
+     spaced relative `+Nms`/`+Ns` ticks in between, at an automatically
+     chosen "nice" step (`pickNiceTickStep`: 1/2/5 x a power of ten,
+     targeting ~6 ticks); matching faint gridlines run down each row's
+     track. The **Fixed time scale** checkbox (next to the tab strip, only
+     shown on the Timeline tab) switches from auto-fit (the full range
+     scaled to 100% width) to a constant pixel width per tick
+     (`FIXED_SCALE_PX_PER_TICK`), wrapping the axis+rows in a horizontally
+     scrollable `.timeline-scroll` once the content is wider than the
+     panel - useful for comparing timings precisely across a wide time
+     range instead of having everything squeezed to fit. Hovering a row
+     (`buildTimelineRowTooltip`) shows a full-detail tooltip: method + URL,
+     status, absolute start time, total time, every non-zero timing phase,
+     and request/response header/body sizes.
+   - **Stats**: renders `computeAggregateStats` as Fiddler's classic
+     "Statistics" text block - request count; bytes sent/received (with
+     headers/body breakdown); actual performance (start/end clock times,
+     sequence duration, aggregate session duration); response code tally;
+     response bytes by content-type.
 
 ### Orchestration
 - **Main Application** (`src/index.ts`) - Reads the file locally, calls
-  `HarParser.parse`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`.
-  Also implements the header's **Export** button (`exportData`), which
-  downloads the entries currently passing the request table's filter (via
-  `RequestTable.getVisibleEntries`) as a standalone `.har` (JSON) file,
+  `HarParser.parse`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`
+  (`onSelect` → `detailPanel.render`, `onMultiSelect` →
+  `detailPanel.renderMultiSelect`/`showEmptyState` when the selection is
+  cleared). Also implements the header's **Export** button (`exportData`),
+  which downloads the entries currently passing the request table's filter
+  (via `RequestTable.getVisibleEntries`) as a standalone `.har` (JSON) file,
   named `<original-name>.filtered.har`. The button's `title` tooltip states
   what/format is exported; keep it in sync if the export format or scope
   changes. After a file loads, `displayTimeRange` fills `#time-range`
@@ -111,8 +156,11 @@ Follow these patterns when adding new features:
 3. `HarParser.parse` turns the raw HAR JSON into structured entries
 4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
    starts in its empty state
-5. Selecting a row calls `DetailPanel.render(entry)`, which renders both
-   sides' active sub-tab (Headers/Raw/Cookies/Syntax)
+5. Selecting a single row calls `DetailPanel.render(entry)`, which renders
+   both sides' active sub-tab (Headers/Raw/Cookies/Syntax); selecting 2+
+   rows (Ctrl/Cmd-click or Shift-click) calls
+   `DetailPanel.renderMultiSelect(entries)`, which renders the aggregate
+   Timeline/Stats view instead
 
 ### State Management
 All state is kept in-memory in the browser. No external state management
@@ -192,6 +240,12 @@ panes stack vertically under 900px width.
 2. If the data is used by the filter engine, also wire it into
    `filterParser.ts`'s `getFieldValue`/`FIELD_ALIASES`
 
+### Adding/Changing a Timeline Phase
+1. Update `TIMELINE_PHASES` in `DetailPanel.ts` (key into `ParsedEntry.timings`,
+   label, CSS class) and add the matching `.phase-xxx` color in `main.css`
+2. If it's a new raw HAR timing field, add it to `HarTimingsRaw`/
+   `ParsedTimings` in `src/types/har.ts` and to `HarParser.parseTimings`
+
 ## TypeScript
 
 The project is written in strict-mode TypeScript (`tsconfig.json`: `strict`
@@ -213,8 +267,9 @@ and `noUncheckedIndexedAccess`). A few things to keep in mind:
 ## Testing
 
 Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
-- `tests/harParser.test.ts` - parsing, formatting, derived fields
+- `tests/harParser.test.ts` - parsing, formatting, derived fields, timing normalization
 - `tests/filterParser.test.ts` - filter query parsing and matching
+- `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES

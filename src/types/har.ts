@@ -67,13 +67,24 @@ export interface HarResponseRaw {
   comment?: string;
 }
 
+export interface HarTimingsRaw {
+  blocked?: number;
+  dns?: number;
+  connect?: number;
+  send?: number;
+  wait?: number;
+  receive?: number;
+  ssl?: number;
+  comment?: string;
+}
+
 export interface HarEntryRaw {
   startedDateTime?: string;
   time?: number;
   request?: HarRequestRaw;
   response?: HarResponseRaw;
   cache?: Record<string, unknown>;
-  timings?: Record<string, unknown>;
+  timings?: HarTimingsRaw;
   serverIPAddress?: string;
   connection?: string;
   comment?: string;
@@ -93,6 +104,16 @@ export interface HarData {
 }
 
 // --- Structured (parsed) shapes produced by HarParser ---
+
+export interface ParsedTimings {
+  blocked: number;
+  dns: number;
+  connect: number;
+  send: number;
+  wait: number;
+  receive: number;
+  ssl: number;
+}
 
 export interface ParsedRequest {
   method: string;
@@ -138,7 +159,7 @@ export interface ParsedEntry {
   request: ParsedRequest;
   response: ParsedResponse;
   cache: Record<string, unknown>;
-  timings: Record<string, unknown>;
+  timings: ParsedTimings;
   serverIPAddress: string;
   connection: string;
   comment: string;

@@ -100,4 +100,29 @@ describe('HarParser', () => {
       expect(parser.getContentType('unknown/type')).toBe('other');
     });
   });
+
+  describe('parseTimings', () => {
+    it('normalizes -1/absent timing fields to 0', () => {
+      const timings = parser.parseTimings({ blocked: 20, dns: -1, connect: 30, send: 5, wait: 70, receive: 15, ssl: 25 });
+      expect(timings).toEqual({ blocked: 20, dns: 0, connect: 30, send: 5, wait: 70, receive: 15, ssl: 25 });
+    });
+
+    it('defaults missing fields to 0', () => {
+      expect(parser.parseTimings({})).toEqual({ blocked: 0, dns: 0, connect: 0, send: 0, wait: 0, receive: 0, ssl: 0 });
+    });
+  });
+
+  describe('formatClockTime', () => {
+    it('formats an absolute timestamp as HH:MM:SS.mmm', () => {
+      const timeMs = new Date(2023, 0, 1, 17, 53, 26, 481).getTime();
+      expect(parser.formatClockTime(timeMs)).toBe('17:53:26.481');
+    });
+  });
+
+  describe('formatDurationClock', () => {
+    it('formats a duration in milliseconds as HH:MM:SS.mmm', () => {
+      expect(parser.formatDurationClock(3316)).toBe('00:00:03.316');
+      expect(parser.formatDurationClock(37)).toBe('00:00:00.037');
+    });
+  });
 });

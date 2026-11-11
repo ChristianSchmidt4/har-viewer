@@ -5,10 +5,12 @@ import type {
   HarRequestRaw,
   HarResponseRaw,
   HarContentRaw,
+  HarTimingsRaw,
   ParsedEntry,
   ParsedRequest,
   ParsedResponse,
   ParsedContent,
+  ParsedTimings,
   ParsedHar
 } from '../types/har.js';
 
@@ -47,7 +49,7 @@ export class HarParser {
         request,
         response,
         cache: entry.cache || {},
-        timings: entry.timings || {},
+        timings: this.parseTimings(entry.timings || {}),
         serverIPAddress: entry.serverIPAddress || '',
         connection: entry.connection || '',
         comment: entry.comment || '',
@@ -136,6 +138,21 @@ export class HarParser {
     };
   }
 
+  // HAR timings use -1 (or an absent field) to mean "not applicable for
+  // this request" - normalized to 0 so callers can sum/render them directly.
+  parseTimings(timings: HarTimingsRaw): ParsedTimings {
+    const normalize = (value: number | undefined): number => (value && value > 0 ? value : 0);
+    return {
+      blocked: normalize(timings.blocked),
+      dns: normalize(timings.dns),
+      connect: normalize(timings.connect),
+      send: normalize(timings.send),
+      wait: normalize(timings.wait),
+      receive: normalize(timings.receive),
+      ssl: normalize(timings.ssl)
+    };
+  }
+
   // Format time in milliseconds to a human-readable format
   formatTime(timeMs: number): string {
     if (!Number.isFinite(timeMs)) return 'N/A';
@@ -155,6 +172,28 @@ export class HarParser {
   formatDateTime(timeMs: number): string {
     if (!Number.isFinite(timeMs)) return 'N/A';
     return new Date(timeMs).toLocaleString();
+  }
+
+  // Format an absolute timestamp as a local wall-clock time with
+  // milliseconds (HH:MM:SS.mmm), as used in the aggregate stats panel.
+  formatClockTime(timeMs: number): string {
+    if (!Number.isFinite(timeMs)) return 'N/A';
+    const date = new Date(timeMs);
+    const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+  }
+
+  // Format a duration in milliseconds as HH:MM:SS.mmm, as used in the
+  // aggregate stats panel.
+  formatDurationClock(durationMs: number): string {
+    if (!Number.isFinite(durationMs) || durationMs < 0) return 'N/A';
+    const totalMs = Math.round(durationMs);
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
+    const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
   }
 
   // Format bytes to a human-readable format

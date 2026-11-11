@@ -1,14 +1,17 @@
-// Right-hand panel: shows the selected entry split into a Request side and
-// a Response side. Each side has its own Headers / Raw / Cookies / Syntax
-// tabs, mirroring Fiddler's Inspectors layout.
+// Right-hand panel: shows either a single selected entry split into Request
+// / Response sides, or - when multiple rows are multi-selected in the
+// request table - an aggregate view with Timeline (waterfall) and Stats
+// tabs, mirroring Fiddler's single-inspector and "Statistics" views.
 import { HarParser } from '../utils/harParser.js';
 import { escapeHtml } from '../utils/domUtils.js';
 import { buildRawRequest, buildRawResponse, highlightSyntax } from '../utils/httpFormatter.js';
 import { makeResizer } from '../utils/resizer.js';
+import { computeAggregateStats } from '../utils/aggregateStats.js';
 import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
 
 type Side = 'request' | 'response';
 type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax';
+type AggregateTabKey = 'timeline' | 'stats';
 
 interface SubTab {
   key: SubTabKey;
@@ -22,12 +25,32 @@ const SUB_TABS: SubTab[] = [
   { key: 'syntax', label: 'Syntax' }
 ];
 
+// One segment of the waterfall bar per Fiddler's Timeline documentation
+// (https://www.telerik.com/fiddler/fiddler-classic/documentation/knowledge-base/timeline).
+const TIMELINE_PHASES: { key: keyof ParsedEntry['timings']; label: string; className: string }[] = [
+  { key: 'blocked', label: 'Blocked', className: 'phase-blocked' },
+  { key: 'dns', label: 'DNS Lookup', className: 'phase-dns' },
+  { key: 'connect', label: 'Connect', className: 'phase-connect' },
+  { key: 'ssl', label: 'SSL/TLS', className: 'phase-ssl' },
+  { key: 'send', label: 'Send', className: 'phase-send' },
+  { key: 'wait', label: 'Wait (TTFB)', className: 'phase-wait' },
+  { key: 'receive', label: 'Receive', className: 'phase-receive' }
+];
+
+// Pixels per tick step when the fixed time scale is enabled, i.e. every
+// "nice" tick interval is always this many pixels wide regardless of how
+// long the overall selection spans - longer selections simply get wider
+// (horizontally scrollable) timelines instead of being squeezed to fit.
+const FIXED_SCALE_PX_PER_TICK = 120;
+
 export class DetailPanel {
   private harParser: HarParser;
   private containerEl: HTMLElement;
   private emptyStateEl: HTMLElement;
   private contentEl: HTMLElement;
   private activeSubTab: Record<Side, SubTabKey>;
+  private activeAggregateTab: AggregateTabKey;
+  private fixedTimelineScale: boolean;
 
   constructor() {
     this.harParser = new HarParser();
@@ -38,6 +61,8 @@ export class DetailPanel {
     // Remembers the active sub-tab per side so re-selecting a request keeps
     // the user's place (e.g. stay on "Raw" while clicking through rows).
     this.activeSubTab = { request: 'headers', response: 'headers' };
+    this.activeAggregateTab = 'timeline';
+    this.fixedTimelineScale = false;
   }
 
   showEmptyState(): void {
@@ -82,6 +107,260 @@ export class DetailPanel {
     this.renderSidePanel('request', entry);
     this.renderSidePanel('response', entry);
     this.bindDetailSplitter();
+  }
+
+  // Renders the aggregate (Timeline/Stats) view for 2+ selected entries.
+  renderMultiSelect(entries: ParsedEntry[]): void {
+    this.emptyStateEl.classList.add('hidden');
+    this.contentEl.classList.remove('hidden');
+
+    this.contentEl.innerHTML = `
+      <div class="detail-summary">
+        <span class="summary-method">${entries.length} requests selected</span>
+      </div>
+      <div class="sub-tabs aggregate-tabs-row" data-aggregate-tabs>
+        ${(['timeline', 'stats'] as AggregateTabKey[]).map(key => `
+          <div class="sub-tab ${key === this.activeAggregateTab ? 'active' : ''}" data-aggregate-tab="${key}">
+            ${key === 'timeline' ? 'Timeline' : 'Stats'}
+          </div>
+        `).join('')}
+        <label class="timeline-scale-toggle ${this.activeAggregateTab === 'timeline' ? '' : 'hidden'}" data-timeline-scale-toggle>
+          <input type="checkbox" id="timeline-fixed-scale" ${this.fixedTimelineScale ? 'checked' : ''} />
+          Fixed time scale
+        </label>
+      </div>
+      <div class="aggregate-panel" data-aggregate-panel></div>
+    `;
+
+    this.bindAggregateTabs(entries);
+    this.renderAggregatePanel(entries);
+  }
+
+  private bindAggregateTabs(entries: ParsedEntry[]): void {
+    const tabsEl = this.contentEl.querySelector<HTMLElement>('[data-aggregate-tabs]')!;
+    const scaleToggleEl = this.contentEl.querySelector<HTMLElement>('[data-timeline-scale-toggle]')!;
+    tabsEl.querySelectorAll<HTMLElement>('.sub-tab').forEach(tabEl => {
+      tabEl.addEventListener('click', () => {
+        this.activeAggregateTab = tabEl.dataset.aggregateTab as AggregateTabKey;
+        tabsEl.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+        tabEl.classList.add('active');
+        scaleToggleEl.classList.toggle('hidden', this.activeAggregateTab !== 'timeline');
+        this.renderAggregatePanel(entries);
+      });
+    });
+
+    const scaleCheckboxEl = scaleToggleEl.querySelector<HTMLInputElement>('#timeline-fixed-scale')!;
+    scaleCheckboxEl.addEventListener('change', () => {
+      this.fixedTimelineScale = scaleCheckboxEl.checked;
+      this.renderAggregatePanel(entries);
+    });
+  }
+
+  private renderAggregatePanel(entries: ParsedEntry[]): void {
+    const panelEl = this.contentEl.querySelector<HTMLElement>('[data-aggregate-panel]')!;
+    panelEl.innerHTML = this.activeAggregateTab === 'timeline'
+      ? this.renderTimeline(entries)
+      : this.renderStats(entries);
+  }
+
+  private renderTimeline(entries: ParsedEntry[]): string {
+    if (!entries.length) return '<p class="empty-note">No requests selected</p>';
+
+    const starts = entries.map(e => e.startedTimeMs).filter(Number.isFinite);
+    const ends = entries.map(e => e.startedTimeMs + Math.max(e.time, 0)).filter(Number.isFinite);
+    const rangeStart = starts.length ? Math.min(...starts) : 0;
+    const rangeEnd = ends.length ? Math.max(...ends) : rangeStart + 1;
+    const rangeMs = Math.max(rangeEnd - rangeStart, 1);
+    const step = this.pickNiceTickStep(rangeMs);
+
+    // Auto mode fits the whole range into 100% width (percentage-based
+    // positioning); fixed mode gives every tick a constant pixel width, so
+    // longer selections produce a wider (horizontally scrollable) track.
+    const tickCount = Math.ceil(rangeMs / step);
+    const trackWidthPx = this.fixedTimelineScale ? tickCount * FIXED_SCALE_PX_PER_TICK : null;
+    const unit = (ms: number): string => trackWidthPx != null
+      ? `${(ms / rangeMs) * trackWidthPx}px`
+      : `${(ms / rangeMs) * 100}%`;
+
+    const rows = entries.map(entry => {
+      const offsetMs = Number.isFinite(entry.startedTimeMs) ? entry.startedTimeMs - rangeStart : 0;
+      const totalPhaseMs = TIMELINE_PHASES.reduce((sum, phase) => sum + entry.timings[phase.key], 0);
+      // Requests without detailed phase timings (e.g. synthetic/sample data)
+      // still get a single bar sized to the overall request time.
+      const effectivePhases = totalPhaseMs > 0
+        ? TIMELINE_PHASES.map(phase => ({ ...phase, ms: entry.timings[phase.key] }))
+        : [{ key: 'wait' as const, label: 'Duration', className: 'phase-wait', ms: entry.time }];
+      const barWidthMs = Math.max(entry.time, totalPhaseMs, 0.001);
+      const rowTooltip = this.buildTimelineRowTooltip(entry);
+
+      const segments = effectivePhases
+        .filter(phase => phase.ms > 0)
+        .map(phase => `<span class="timeline-segment ${phase.className}" style="width:${unit(phase.ms)}" title="${rowTooltip}"></span>`)
+        .join('');
+
+      return `
+        <div class="timeline-row">
+          <div class="timeline-label" title="${rowTooltip}">
+            <span class="timeline-method">${escapeHtml(entry.request.method)}</span>
+            ${escapeHtml(entry.path || entry.request.url)}
+          </div>
+          <div class="timeline-track" style="${trackWidthPx != null ? `width:${trackWidthPx}px; flex: none;` : ''}" title="${rowTooltip}">
+            ${this.renderTimelineGridLines(rangeMs, step, unit)}
+            <div class="timeline-bar" style="left:${unit(offsetMs)}; width:${unit(barWidthMs)}">${segments}</div>
+          </div>
+          <div class="timeline-duration">${this.harParser.formatTime(entry.time)}</div>
+        </div>
+      `;
+    }).join('');
+
+    const legend = TIMELINE_PHASES.map(phase =>
+      `<span class="timeline-legend-item"><span class="timeline-swatch ${phase.className}"></span>${phase.label}</span>`
+    ).join('');
+
+    const axisAndRows = `
+      ${this.renderTimelineAxis(rangeStart, rangeEnd, rangeMs, step, unit, trackWidthPx)}
+      <div class="timeline-rows">${rows}</div>
+    `;
+
+    return `
+      <div class="timeline-legend">${legend}</div>
+      ${trackWidthPx != null ? `<div class="timeline-scroll">${axisAndRows}</div>` : axisAndRows}
+    `;
+  }
+
+  // Renders the x-axis: absolute clock time at the start/end, and evenly
+  // spaced relative offset ticks (e.g. "+100ms") in between, using a
+  // "nice" step (1/2/5 x a power of ten) so tick labels don't overlap.
+  private renderTimelineAxis(
+    rangeStart: number,
+    rangeEnd: number,
+    rangeMs: number,
+    step: number,
+    unit: (ms: number) => string,
+    trackWidthPx: number | null
+  ): string {
+    const ticks: string[] = [];
+    // Skip ticks too close to either edge so they don't collide with the
+    // absolute start/end labels.
+    const edgeMarginMs = rangeMs * 0.22;
+    for (let offset = step; offset < rangeMs; offset += step) {
+      if (offset < edgeMarginMs || rangeMs - offset < edgeMarginMs) continue;
+      ticks.push(`<span class="timeline-tick" style="left:${unit(offset)}">+${this.harParser.formatTime(offset)}</span>`);
+    }
+
+    return `
+      <div class="timeline-axis-row">
+        <div class="timeline-axis-spacer"></div>
+        <div class="timeline-axis" style="${trackWidthPx != null ? `width:${trackWidthPx}px; flex: none;` : ''}">
+          <span class="timeline-axis-endpoint timeline-axis-start">${this.harParser.formatClockTime(rangeStart)}</span>
+          ${ticks.join('')}
+          <span class="timeline-axis-endpoint timeline-axis-end">${this.harParser.formatClockTime(rangeEnd)}</span>
+        </div>
+        <div class="timeline-axis-spacer timeline-axis-spacer-end"></div>
+      </div>
+    `;
+  }
+
+  // Builds a multi-line plain-text tooltip (native title attribute) for a
+  // timeline row: URL, status, per-phase timings and request/response sizes.
+  private buildTimelineRowTooltip(entry: ParsedEntry): string {
+    const lines = [
+      `${entry.request.method} ${entry.request.url}`,
+      `Status: ${entry.response.status || 'N/A'} ${entry.response.statusText}`.trim(),
+      `Started: ${this.harParser.formatClockTime(entry.startedTimeMs)}`,
+      `Total time: ${this.harParser.formatTime(entry.time)}`,
+      ''
+    ];
+
+    const timingLines = TIMELINE_PHASES
+      .filter(phase => entry.timings[phase.key] > 0)
+      .map(phase => `  ${phase.label}: ${this.harParser.formatTime(entry.timings[phase.key])}`);
+    if (timingLines.length) {
+      lines.push('Timings:', ...timingLines, '');
+    }
+
+    lines.push(
+      'Sizes:',
+      `  Request headers: ${this.harParser.formatBytes(entry.request.headersSize)}`,
+      `  Request body: ${this.harParser.formatBytes(entry.request.bodySize)}`,
+      `  Response headers: ${this.harParser.formatBytes(entry.response.headersSize)}`,
+      `  Response body: ${this.harParser.formatBytes(entry.response.bodySize)}`
+    );
+
+    return escapeHtml(lines.join('\n'));
+  }
+
+  private renderTimelineGridLines(rangeMs: number, step: number, unit: (ms: number) => string): string {
+    const lines: string[] = [];
+    for (let offset = step; offset < rangeMs; offset += step) {
+      lines.push(`<span class="timeline-gridline" style="left:${unit(offset)}"></span>`);
+    }
+    return lines.join('');
+  }
+
+  // Picks a "nice" tick step (1/2/5 * 10^n) targeting ~5-8 ticks across the
+  // given range, the standard approach used by chart axis libraries.
+  private pickNiceTickStep(rangeMs: number, targetTicks = 6): number {
+    if (!Number.isFinite(rangeMs) || rangeMs <= 0) return 1;
+    const roughStep = rangeMs / targetTicks;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const normalized = roughStep / magnitude;
+
+    let niceNormalized: number;
+    if (normalized <= 1) niceNormalized = 1;
+    else if (normalized <= 2) niceNormalized = 2;
+    else if (normalized <= 5) niceNormalized = 5;
+    else niceNormalized = 10;
+
+    return niceNormalized * magnitude;
+  }
+
+  private renderStats(entries: ParsedEntry[]): string {
+    if (!entries.length) return '<p class="empty-note">No requests selected</p>';
+
+    const stats = computeAggregateStats(entries);
+    const responseCodeRows = Object.entries(stats.responseCodes)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([code, count]) => `<tr><td>HTTP/${escapeHtml(code)}</td><td>${count}</td></tr>`)
+      .join('');
+    const responseTypeRows = Object.entries(stats.responseBytesByType)
+      .sort(([, a], [, b]) => b - a)
+      .map(([type, bytes]) => `<tr><td>${escapeHtml(type)}</td><td>${this.harParser.formatBytes(bytes)}</td></tr>`)
+      .join('');
+
+    return `
+      <div class="stats-view">
+        <table class="stats-table">
+          <tbody>
+            <tr><td>Request Count:</td><td>${stats.requestCount}</td></tr>
+            <tr><td>Bytes Sent:</td><td>${this.harParser.formatBytes(stats.bytesSent.total)}
+              <span class="stats-breakdown">(headers: ${this.harParser.formatBytes(stats.bytesSent.headers)}; body: ${this.harParser.formatBytes(stats.bytesSent.body)})</span></td></tr>
+            <tr><td>Bytes Received:</td><td>${this.harParser.formatBytes(stats.bytesReceived.total)}
+              <span class="stats-breakdown">(headers: ${this.harParser.formatBytes(stats.bytesReceived.headers)}; body: ${this.harParser.formatBytes(stats.bytesReceived.body)})</span></td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="stats-section-title">Actual Performance</h4>
+        <table class="stats-table">
+          <tbody>
+            <tr><td>Requests started at:</td><td>${this.harParser.formatClockTime(stats.startedAt)}</td></tr>
+            <tr><td>Responses completed at:</td><td>${this.harParser.formatClockTime(stats.completedAt)}</td></tr>
+            <tr><td>Sequence (clock) duration:</td><td>${this.harParser.formatDurationClock(stats.sequenceDurationMs)}</td></tr>
+            <tr><td>Aggregate Session duration:</td><td>${this.harParser.formatDurationClock(stats.aggregateSessionDurationMs)}</td></tr>
+          </tbody>
+        </table>
+
+        <h4 class="stats-section-title">Response Codes</h4>
+        <table class="stats-table">
+          <tbody>${responseCodeRows}</tbody>
+        </table>
+
+        <h4 class="stats-section-title">Response Bytes (by Content-Type)</h4>
+        <table class="stats-table">
+          <tbody>${responseTypeRows}</tbody>
+        </table>
+      </div>
+    `;
   }
 
   private hasBody(side: Side, entry: ParsedEntry): boolean {

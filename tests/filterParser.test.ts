@@ -39,7 +39,7 @@ function makeEntry(overrides: Partial<Omit<ParsedEntry, 'request' | 'response'>>
     relativeStartMs: 0,
     time: 100,
     cache: {},
-    timings: {},
+    timings: { blocked: 0, dns: 0, connect: 0, send: 0, wait: 0, receive: 0, ssl: 0 },
     serverIPAddress: '',
     connection: '',
     comment: '',

@@ -553,6 +553,233 @@ body.resizing-vertical * {
 .syntax-attr { color: #e0a85f; }
 .syntax-empty { color: var(--dark-gray); font-style: italic; }
 
+/* Aggregate (multi-select) view: Timeline / Stats */
+
+.aggregate-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+}
+
+/* Timeline (waterfall) */
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.1rem;
+  margin-bottom: 0.9rem;
+  font-size: 0.78rem;
+  color: var(--dark-gray);
+}
+
+.timeline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.timeline-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.timeline-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+}
+
+.timeline-label {
+  flex: 0 0 26%;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font);
+}
+
+.timeline-method {
+  font-weight: 700;
+  color: var(--secondary-color);
+  margin-right: 0.35rem;
+}
+
+.timeline-track {
+  position: relative;
+  flex: 1;
+  height: 16px;
+  background-color: var(--light-gray);
+  border-radius: 3px;
+}
+
+.timeline-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 2px;
+  display: flex;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.timeline-segment {
+  height: 100%;
+}
+
+.timeline-gridline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-color);
+  opacity: 0.6;
+}
+
+.timeline-duration {
+  flex: 0 0 64px;
+  font-family: var(--mono-font);
+  color: var(--dark-gray);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Fixed-scale mode: the axis/rows are wrapped in a horizontally scrollable
+   container, and the track/axis columns get an explicit pixel width (set
+   inline) instead of 1fr, so the row grows past the viewport instead of
+   compressing to fit it. */
+
+.timeline-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.timeline-scale-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--dark-gray);
+  cursor: pointer;
+  padding: 0 0.5rem;
+  white-space: nowrap;
+}
+
+.timeline-scale-toggle input {
+  cursor: pointer;
+}
+
+.aggregate-tabs-row {
+  align-items: center;
+}
+
+.timeline-axis-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.72rem;
+  color: var(--dark-gray);
+}
+
+.timeline-axis-spacer {
+  flex: 0 0 26%;
+  min-width: 120px;
+}
+
+.timeline-axis-spacer-end {
+  flex: 0 0 64px;
+  min-width: 64px;
+}
+
+.timeline-axis-row .timeline-axis {
+  flex: 1;
+}
+
+.timeline-axis {
+  position: relative;
+  height: 1.1rem;
+}
+
+.timeline-axis-endpoint {
+  position: absolute;
+  top: 0;
+  font-weight: 600;
+  color: var(--text-color);
+  white-space: nowrap;
+}
+
+.timeline-axis-start {
+  left: 0;
+  transform: translateX(-50%);
+}
+
+.timeline-axis-end {
+  right: 0;
+  transform: translateX(50%);
+}
+
+.timeline-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.phase-blocked  { background-color: #95a5a6; }
+.phase-dns      { background-color: #9b59b6; }
+.phase-connect  { background-color: #f39c12; }
+.phase-ssl      { background-color: #e67e22; }
+.phase-send     { background-color: #e74c3c; }
+.phase-wait     { background-color: #3498db; }
+.phase-receive  { background-color: #27ae60; }
+
+/* Stats */
+
+.stats-view {
+  font-size: 0.85rem;
+}
+
+.stats-section-title {
+  margin-top: 1.2rem;
+  margin-bottom: 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dark-gray);
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.stats-table td {
+  padding: 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--mid-gray);
+}
+
+.stats-table td:first-child {
+  color: var(--dark-gray);
+  white-space: nowrap;
+}
+
+.stats-breakdown {
+  color: var(--dark-gray);
+  font-size: 0.8rem;
+  margin-left: 0.35rem;
+}
+
 /* Error toast */
 
 #error-message {

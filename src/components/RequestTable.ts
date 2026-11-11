@@ -26,15 +26,18 @@ const COLUMNS: Column[] = [
 
 export interface RequestTableOptions {
   onSelect: (entry: ParsedEntry) => void;
+  onMultiSelect: (entries: ParsedEntry[]) => void;
 }
 
 export class RequestTable {
   private onSelect: (entry: ParsedEntry) => void;
+  private onMultiSelect: (entries: ParsedEntry[]) => void;
   private harParser: HarParser;
 
   private allEntries: ParsedEntry[];
   private visibleEntries: ParsedEntry[];
-  private selectedEntryId: number | null;
+  private selectedEntryIds: Set<number>;
+  private lastSelectedEntryId: number | null;
   private filterDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   private filterInputEl: HTMLInputElement;
@@ -42,13 +45,15 @@ export class RequestTable {
   private tableBodyEl: HTMLElement;
   private resultCountEl: HTMLElement;
 
-  constructor({ onSelect }: RequestTableOptions) {
+  constructor({ onSelect, onMultiSelect }: RequestTableOptions) {
     this.onSelect = onSelect;
+    this.onMultiSelect = onMultiSelect;
     this.harParser = new HarParser();
 
     this.allEntries = [];
     this.visibleEntries = [];
-    this.selectedEntryId = null;
+    this.selectedEntryIds = new Set();
+    this.lastSelectedEntryId = null;
 
     this.filterInputEl = document.getElementById('request-filter') as HTMLInputElement;
     this.filterHintEl = document.getElementById('filter-hint')!;
@@ -75,13 +80,22 @@ export class RequestTable {
     this.tableBodyEl.addEventListener('click', (event) => {
       const row = (event.target as HTMLElement).closest<HTMLElement>('tr[data-entry-id]');
       if (!row) return;
-      this.selectEntry(parseInt(row.dataset.entryId!, 10));
+      const mouseEvent = event as MouseEvent;
+      const entryId = parseInt(row.dataset.entryId!, 10);
+      if (mouseEvent.shiftKey) {
+        this.selectRange(entryId);
+      } else if (mouseEvent.ctrlKey || mouseEvent.metaKey) {
+        this.toggleEntry(entryId);
+      } else {
+        this.selectEntry(entryId);
+      }
     });
   }
 
   setEntries(entries: ParsedEntry[]): void {
     this.allEntries = entries;
-    this.selectedEntryId = null;
+    this.selectedEntryIds.clear();
+    this.lastSelectedEntryId = null;
     this.filterInputEl.value = '';
     this.applyFilter();
   }
@@ -113,7 +127,7 @@ export class RequestTable {
   private buildRow(entry: ParsedEntry): HTMLTableRowElement {
     const row = document.createElement('tr');
     row.dataset.entryId = String(entry.id);
-    if (entry.id === this.selectedEntryId) {
+    if (this.selectedEntryIds.has(entry.id)) {
       row.classList.add('selected');
     }
 
@@ -142,13 +156,53 @@ export class RequestTable {
   }
 
   private selectEntry(entryId: number): void {
-    this.selectedEntryId = entryId;
-    this.tableBodyEl.querySelectorAll<HTMLElement>('tr[data-entry-id]').forEach(row => {
-      row.classList.toggle('selected', parseInt(row.dataset.entryId!, 10) === entryId);
-    });
+    this.selectedEntryIds = new Set([entryId]);
+    this.lastSelectedEntryId = entryId;
+    this.syncRowSelectionClasses();
+    this.notifySelection();
+  }
 
-    const entry = this.allEntries.find(e => e.id === entryId);
-    if (entry) this.onSelect(entry);
+  private toggleEntry(entryId: number): void {
+    if (this.selectedEntryIds.has(entryId)) {
+      this.selectedEntryIds.delete(entryId);
+    } else {
+      this.selectedEntryIds.add(entryId);
+    }
+    this.lastSelectedEntryId = entryId;
+    this.syncRowSelectionClasses();
+    this.notifySelection();
+  }
+
+  private selectRange(entryId: number): void {
+    const anchorId = this.lastSelectedEntryId ?? entryId;
+    const anchorIndex = this.visibleEntries.findIndex(e => e.id === anchorId);
+    const targetIndex = this.visibleEntries.findIndex(e => e.id === entryId);
+    if (anchorIndex === -1 || targetIndex === -1) {
+      this.selectEntry(entryId);
+      return;
+    }
+
+    const [start, end] = anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
+    this.selectedEntryIds = new Set(this.visibleEntries.slice(start, end + 1).map(e => e.id));
+    this.syncRowSelectionClasses();
+    this.notifySelection();
+  }
+
+  private syncRowSelectionClasses(): void {
+    this.tableBodyEl.querySelectorAll<HTMLElement>('tr[data-entry-id]').forEach(row => {
+      row.classList.toggle('selected', this.selectedEntryIds.has(parseInt(row.dataset.entryId!, 10)));
+    });
+  }
+
+  private notifySelection(): void {
+    const selected = this.allEntries.filter(e => this.selectedEntryIds.has(e.id));
+    if (selected.length === 0) {
+      this.onMultiSelect([]);
+    } else if (selected.length === 1) {
+      this.onSelect(selected[0]!);
+    } else {
+      this.onMultiSelect(selected);
+    }
   }
 
   private updateResultCount(): void {
