@@ -13,7 +13,16 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   **Cookies** and **Syntax** (highlighted body) tabs; image responses get an
   **Image** preview tab and font responses a **Font** tab (renders the
   pangram, the Latin alphabet, several sizes and text styles with the file's own font)
-- Export functionality
+- Custom request-table columns: type e.g. `reqheader:X-Trace`,
+  `resheader:Content-Encoding`, `reqcookie:sessionid` or `rescookie:track`
+  into the column input to show that value per request; columns persist in
+  localStorage and are removed with the `×` on their header
+- Multi-select (Ctrl/Cmd- or Shift-click) shows an aggregate view with a
+  **Timeline** waterfall and a **Stats** summary
+- Header shows the archive's start time and total duration
+- Opens plain `.har` and gzip-compressed `.har.gz` files
+- Export of the currently filtered requests as a `.har` file
+- Resizable panes (drag the splitters)
 - Responsive design (panels stack on narrow screens)
 
 ## Project Structure
