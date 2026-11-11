@@ -34,6 +34,14 @@ export class DetailPanel {
     this.emptyStateEl.classList.add('hidden');
     this.contentEl.classList.remove('hidden');
 
+    // The Syntax tab only makes sense when there's a body to highlight;
+    // fall back to Headers if the previously active tab no longer applies.
+    ['request', 'response'].forEach(side => {
+      if (this.activeSubTab[side] === 'syntax' && !this.hasBody(side, entry)) {
+        this.activeSubTab[side] = 'headers';
+      }
+    });
+
     this.contentEl.innerHTML = `
       <div class="detail-summary">
         <span class="summary-method">${escapeHtml(entry.request.method)}</span>
@@ -43,13 +51,13 @@ export class DetailPanel {
       <div class="detail-columns" id="detail-columns">
         <section class="detail-side" data-side="request">
           <h3>Request</h3>
-          ${this.renderSubTabs('request')}
+          ${this.renderSubTabs('request', entry)}
           <div class="sub-tab-panels" data-side-panels="request"></div>
         </section>
         <div id="detail-splitter" class="splitter splitter-horizontal"></div>
         <section class="detail-side" data-side="response">
           <h3>Response</h3>
-          ${this.renderSubTabs('response')}
+          ${this.renderSubTabs('response', entry)}
           <div class="sub-tab-panels" data-side-panels="response"></div>
         </section>
       </div>
@@ -59,6 +67,13 @@ export class DetailPanel {
     this.renderSidePanel('request', entry);
     this.renderSidePanel('response', entry);
     this.bindDetailSplitter();
+  }
+
+  hasBody(side, entry) {
+    if (side === 'request') {
+      return Boolean(entry.request.postData && entry.request.postData.text);
+    }
+    return Boolean(entry.response.content && entry.response.content.text);
   }
 
   bindDetailSplitter() {
@@ -76,10 +91,11 @@ export class DetailPanel {
     });
   }
 
-  renderSubTabs(side) {
+  renderSubTabs(side, entry) {
+    const tabs = SUB_TABS.filter(tab => tab.key !== 'syntax' || this.hasBody(side, entry));
     return `
       <div class="sub-tabs" data-side-tabs="${side}">
-        ${SUB_TABS.map(tab => `
+        ${tabs.map(tab => `
           <div class="sub-tab ${tab.key === this.activeSubTab[side] ? 'active' : ''}" data-sub-tab="${tab.key}">
             ${tab.label}
           </div>
