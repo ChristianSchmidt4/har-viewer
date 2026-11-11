@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAR Viewer - Fiddler Style</title>
+    <link rel="stylesheet" href="/src/styles/main.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>HAR Viewer</h1>
+            <p>Client-side HTTP Archive viewer inspired by Fiddler</p>
+        </header>
+        <main>
+            <div class="upload-section">
+                <input type="file" id="har-file-input" accept=".har,application/json" />
+                <label for="har-file-input" class="file-upload-btn">Select HAR File</label>
+                <div id="file-info"></div>
+            </div>
+            <div id="har-content" class="hidden">
+                <div class="toolbar">
+                    <button id="refresh-btn">Refresh</button>
+                    <button id="export-btn">Export</button>
+                </div>
+                <div class="request-list-container">
+                    <table id="requests-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Method</th>
+                                <th>URL</th>
+                                <th>Status</th>
+                                <th>Type</th>
+                                <th>Size</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requests-table-body">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="request-details-container">
+                    <div id="request-details"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script type="module" src="/src/index.js"></script>
+</body>
+</html>

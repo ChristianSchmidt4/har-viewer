@@ -1,0 +1,32 @@
+{
+  "projectType": "web",
+  "framework": "vanilla-js",
+  "language": "javascript",
+  "features": [
+    "client-side-parsing",
+    "http-archive-viewer",
+    "performance-analysis"
+  ],
+  "hooks": {
+    "onFileCreate": {
+      "command": "echo 'New file created: $FILE_PATH'"
+    },
+    "onBuild": {
+      "command": "npm run build"
+    }
+  },
+  "permissions": {
+    "read": [
+      "src/**/*",
+      "public/**/*",
+      "docs/**/*",
+      "tests/**/*"
+    ],
+    "write": [
+      "src/**/*",
+      "public/**/*",
+      "docs/**/*",
+      "tests/**/*"
+    ]
+  }
+}

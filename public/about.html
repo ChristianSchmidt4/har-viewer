@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - HAR Viewer</title>
+    <link rel="stylesheet" href="/src/styles/main.css">
+    <style>
+        .content {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .feature-list {
+            list-style-type: disc;
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+        }
+        .feature-list li {
+            margin-bottom: 0.5rem;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: var(--secondary-color);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+        .cta-button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>HAR Viewer</h1>
+        <p>Fiddler-inspired HTTP Archive viewer</p>
+    </header>
+
+    <div class="content">
+        <h2>About This Project</h2>
+        <p>This is a client-side HTTP Archive (HAR) viewer inspired by Fiddler. It allows you to inspect and analyze HTTP requests and responses captured in HAR files without uploading them to any server.</p>
+
+        <h2>Key Features</h2>
+        <ul class="feature-list">
+            <li>Client-side parsing - your data never leaves your browser</li>
+            <li>Fiddler-like interface for examining HTTP traffic</li>
+            <li>Detailed request/response headers inspection</li>
+            <li>Performance timing analysis</li>
+            <li>Response content viewing</li>
+            <li>Export functionality</li>
+            <li>Fully responsive design</li>
+        </ul>
+
+        <h2>How to Use</h2>
+        <ol>
+            <li>Generate a HAR file from your browser's developer tools</li>
+            <li>Open the HAR Viewer application</li>
+            <li>Upload your HAR file using the file selector</li>
+            <li>Explore your HTTP requests in the detailed interface</li>
+        </ol>
+
+        <h2>HAR Format Support</h2>
+        <p>This viewer supports the HAR 1.2 specification, which includes:</p>
+        <ul class="feature-list">
+            <li>Request/response headers and bodies</li>
+            <li>Timing information (DNS, connect, send, wait, receive)</li>
+            <li>Performance metrics</li>
+            <li>Cache information</li>
+            <li>Cookies and query parameters</li>
+        </ul>
+
+        <a href="/" class="cta-button">Try the Viewer</a>
+
+        <h2>Technical Details</h2>
+        <p>This application is built with modern web technologies:</p>
+        <ul class="feature-list">
+            <li>Vanilla JavaScript (no frameworks)</li>
+            <li>Lit for lightweight web components</li>
+            <li>Vite for fast development and building</li>
+            <li>Modern CSS with custom properties</li>
+            <li>ES6 modules for clean code organization</li>
+        </ul>
+
+        <h2>Development</h2>
+        <p>This project is designed for development with AI assistance tools:</p>
+        <ul class="feature-list">
+            <li>Claude Code integration for intelligent code suggestions</li>
+            <li>GitHub Copilot compatibility</li>
+            <li>Well-documented codebase structure</li>
+            <li>Component-based architecture</li>
+        </ul>
+    </div>
+</body>
+</html>
