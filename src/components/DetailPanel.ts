@@ -10,7 +10,7 @@ import { computeAggregateStats } from '../utils/aggregateStats.js';
 import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
 
 type Side = 'request' | 'response';
-type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax' | 'image';
+type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax' | 'image' | 'font';
 type AggregateTabKey = 'timeline' | 'stats';
 
 interface SubTab {
@@ -23,7 +23,8 @@ const SUB_TABS: SubTab[] = [
   { key: 'raw', label: 'Raw' },
   { key: 'cookies', label: 'Cookies' },
   { key: 'syntax', label: 'Syntax' },
-  { key: 'image', label: 'Image' }
+  { key: 'image', label: 'Image' },
+  { key: 'font', label: 'Font' }
 ];
 
 // One segment of the waterfall bar per Fiddler's Timeline documentation
@@ -44,6 +45,64 @@ const TIMELINE_PHASES: { key: keyof ParsedEntry['timings']; label: string; class
 // (horizontally scrollable) timelines instead of being squeezed to fit.
 const FIXED_SCALE_PX_PER_TICK = 120;
 
+const LATIN_UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const LATIN_LOWER = 'abcdefghijklmnopqrstuvwxyz';
+const FONT_SAMPLE_SIZES = [12, 16, 20, 24, 32, 48, 64];
+const FONT_SAMPLE_STYLES: { label: string; css: string }[] = [
+  { label: 'Regular', css: '' },
+  { label: 'Light (300)', css: 'font-weight:300' },
+  { label: 'Bold (700)', css: 'font-weight:700' },
+  { label: 'Black (900)', css: 'font-weight:900' },
+  { label: 'Italic', css: 'font-style:italic' },
+  { label: 'Bold italic', css: 'font-weight:700;font-style:italic' },
+  { label: 'Underline', css: 'text-decoration:underline' },
+  { label: 'Double underline', css: 'text-decoration:underline double' },
+  { label: 'Wavy underline', css: 'text-decoration:underline wavy' },
+  { label: 'Line-through', css: 'text-decoration:line-through' },
+  { label: 'Overline', css: 'text-decoration:overline' },
+  { label: 'Small caps', css: 'font-variant:small-caps' },
+  { label: 'Uppercase', css: 'text-transform:uppercase' },
+  { label: 'Letter-spacing 4px', css: 'letter-spacing:4px' },
+  { label: 'Text shadow', css: 'text-shadow:2px 2px 3px rgba(0,0,0,0.35)' }
+];
+const FONT_SAMPLE_PANGRAM = 'The quick brown fox jumps over the lazy dog';
+
+let fontFamilyCounter = 0;
+
+function buildFontSampleHtml(): string {
+  const sizeRows = FONT_SAMPLE_SIZES.map(size => `
+    <div class="font-row">
+      <span class="font-row-label">${size}px</span>
+      <span class="font-row-sample" style="font-size:${size}px">${LATIN_UPPER} ${LATIN_LOWER}</span>
+    </div>`).join('');
+  const styleRows = FONT_SAMPLE_STYLES.map(style => `
+    <div class="font-row">
+      <span class="font-row-label">${escapeHtml(style.label)}</span>
+      <span class="font-row-sample" style="font-size:20px;${style.css}">${FONT_SAMPLE_PANGRAM}</span>
+    </div>`).join('');
+  return `
+    <section class="font-section">
+      <h4 class="font-section-title">Pangram</h4>
+      <p class="font-pangram" style="font-size:28px">${FONT_SAMPLE_PANGRAM}</p>
+      <p class="font-pangram" style="font-size:14px">${FONT_SAMPLE_PANGRAM}</p>
+    </section>
+    <section class="font-section">
+      <h4 class="font-section-title">Latin alphabet</h4>
+      <p class="font-pangram" style="font-size:24px">${LATIN_UPPER}</p>
+      <p class="font-pangram" style="font-size:24px">${LATIN_LOWER}</p>
+      <p class="font-pangram" style="font-size:24px">0123456789 !?&amp;@#$%()[]{}</p>
+    </section>
+    <section class="font-section">
+      <h4 class="font-section-title">Sizes</h4>
+      ${sizeRows}
+    </section>
+    <section class="font-section">
+      <h4 class="font-section-title">Styles</h4>
+      ${styleRows}
+    </section>
+  `;
+}
+
 export class DetailPanel {
   private harParser: HarParser;
   private containerEl: HTMLElement;
@@ -52,6 +111,7 @@ export class DetailPanel {
   private activeSubTab: Record<Side, SubTabKey>;
   private activeAggregateTab: AggregateTabKey;
   private fixedTimelineScale: boolean;
+  private activeFontFace: FontFace | null = null;
 
   constructor() {
     this.harParser = new HarParser();
@@ -75,13 +135,16 @@ export class DetailPanel {
     this.emptyStateEl.classList.add('hidden');
     this.contentEl.classList.remove('hidden');
 
-    // The Syntax/Image tabs may disappear if the entry no longer applies;
+    // The Syntax/Image/Font tabs may disappear if the entry no longer applies;
     // fall back to Headers if the previously active tab no longer fits.
     (['request', 'response'] as const).forEach(side => {
       if (this.activeSubTab[side] === 'syntax' && !this.hasBody(side, entry)) {
         this.activeSubTab[side] = 'headers';
       }
       if (side === 'response' && this.activeSubTab[side] === 'image' && !this.isImage(entry)) {
+        this.activeSubTab[side] = 'headers';
+      }
+      if (side === 'response' && this.activeSubTab[side] === 'font' && !this.isFont(entry)) {
         this.activeSubTab[side] = 'headers';
       }
     });
@@ -379,6 +442,59 @@ export class DetailPanel {
     return contentType === 'image' || contentType.startsWith('image/');
   }
 
+  private isFont(entry: ParsedEntry): boolean {
+    return entry.contentType === 'font';
+  }
+
+  private decodeBody(content: { text?: string; encoding?: string }): Uint8Array<ArrayBuffer> {
+    const text = content.text ?? '';
+    return content.encoding === 'base64'
+      ? Uint8Array.from(atob(text), c => c.charCodeAt(0))
+      : new TextEncoder().encode(text);
+  }
+
+  private renderFont(entry: ParsedEntry): string {
+    const content = entry.response.content;
+    if (!content || !content.text) return '<p class="empty-note">No font data</p>';
+
+    return `
+      <div class="font-preview" data-font-preview>
+        <div class="font-meta">
+          <span>${escapeHtml(content.mimeType || 'unknown')}</span> ·
+          <span>${this.harParser.formatBytes(content.size)}</span> ·
+          <span data-font-status>Loading…</span>
+        </div>
+        ${buildFontSampleHtml()}
+      </div>
+    `;
+  }
+
+  // Registers the response body as a FontFace so the sample text below
+  // renders with the real font. Runs after the markup is in the DOM.
+  private async applyFontPreview(panelEl: HTMLElement, entry: ParsedEntry): Promise<void> {
+    const previewEl = panelEl.querySelector<HTMLElement>('[data-font-preview]');
+    const statusEl = panelEl.querySelector<HTMLElement>('[data-font-status]');
+    const content = entry.response.content;
+    if (!previewEl || !statusEl || !content || !content.text) return;
+
+    if (this.activeFontFace) {
+      document.fonts.delete(this.activeFontFace);
+      this.activeFontFace = null;
+    }
+
+    const family = `har-preview-font-${++fontFamilyCounter}`;
+    try {
+      const face = new FontFace(family, this.decodeBody(content));
+      await face.load();
+      document.fonts.add(face);
+      this.activeFontFace = face;
+      previewEl.style.fontFamily = `"${family}", sans-serif`;
+      statusEl.textContent = 'Font loaded';
+    } catch {
+      statusEl.textContent = 'Unable to load font';
+    }
+  }
+
   private renderImage(entry: ParsedEntry): string {
     const content = entry.response.content;
     if (!content || !content.text) return '<p class="empty-note">No image data</p>';
@@ -424,6 +540,7 @@ export class DetailPanel {
     const tabs = SUB_TABS.filter(tab => {
       if (tab.key === 'syntax') return this.hasBody(side, entry);
       if (tab.key === 'image') return side === 'response' && this.isImage(entry);
+      if (tab.key === 'font') return side === 'response' && this.isFont(entry);
       return true;
     });
     return `
@@ -471,6 +588,10 @@ export class DetailPanel {
         break;
       case 'image':
         panelEl.innerHTML = this.renderImage(entry);
+        break;
+      case 'font':
+        panelEl.innerHTML = this.renderFont(entry);
+        void this.applyFontPreview(panelEl, entry);
         break;
       default:
         panelEl.innerHTML = '';

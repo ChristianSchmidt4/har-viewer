@@ -10,7 +10,9 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
 - Split Request / Response detail view, each with **Headers**, **Raw**,
-  **Cookies** and **Syntax** (highlighted body) tabs
+  **Cookies** and **Syntax** (highlighted body) tabs; image responses get an
+  **Image** preview tab and font responses a **Font** tab (renders the
+  pangram, the Latin alphabet, several sizes and text styles with the file's own font)
 - Export functionality
 - Responsive design (panels stack on narrow screens)
 

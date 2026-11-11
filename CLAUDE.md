@@ -80,7 +80,9 @@ is needed for development. See [TypeScript](#typescript) below.
 3. **DetailPanel** (`DetailPanel.ts`) - Right-pane detail view with two
    modes: `render(entry)` for a single selected request (Request/Response
    sides, each with independent Headers / Raw / Cookies / Syntax sub-tabs,
-   state remembered per side across selections), and
+   plus Image (response side, `image/*`) and Font (response side,
+   `contentType === 'font'`) preview tabs; state remembered per side across
+   selections), and
    `renderMultiSelect(entries)` for 2+ selected requests, which replaces the
    Request/Response layout with an aggregate view with **Timeline** and
    **Stats** tabs (state remembered in `activeAggregateTab`):
@@ -157,7 +159,8 @@ Follow these patterns when adding new features:
 4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
    starts in its empty state
 5. Selecting a single row calls `DetailPanel.render(entry)`, which renders
-   both sides' active sub-tab (Headers/Raw/Cookies/Syntax); selecting 2+
+   both sides' active sub-tab (Headers/Raw/Cookies/Syntax, plus Image/Font
+   on the response side when applicable); selecting 2+
    rows (Ctrl/Cmd-click or Shift-click) calls
    `DetailPanel.renderMultiSelect(entries)`, which renders the aggregate
    Timeline/Stats view instead
