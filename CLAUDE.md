@@ -70,6 +70,9 @@ is needed for development. See [TypeScript](#typescript) below.
 7. **resizer** (`resizer.ts`) - `makeResizer({ splitterEl, targetEl,
    containerEl, direction, min })` drag-resizes a pane via a splitter element
    (used for the main list/detail split and the Request/Response split).
+8. **virtualWindow** (`virtualWindow.ts`) - `computeWindowRange(scrollTop,
+   viewportHeight, rowHeight, total, overscan)` returns the `[start, end)`
+   row slice to render for a fixed-row-height list (used by `RequestTable`).
 
 ### Types (`src/types/`)
 - **har.ts** - Shared TypeScript interfaces for the raw HAR 1.2 JSON shape
@@ -95,6 +98,14 @@ is needed for development. See [TypeScript](#typescript) below.
    `onMultiSelect(entries)`. Exposes `getVisibleEntries()` so other
    components (e.g. the Export button in `index.ts`) can get the currently
    filtered-in entries.
+   **Windowed rendering**: only the rows inside the `.request-table-scroll`
+   viewport (plus `OVERSCAN_ROWS` above/below) are in the DOM; the rest is
+   represented by `tr.spacer` rows whose heights keep the scrollbar at full
+   list height. `renderWindow()` runs on scroll and on resize (ResizeObserver)
+   and re-renders only when the visible index range changes. `rowHeight` is
+   measured from the first rendered row (default 28px) - keep row CSS
+   (`#requests-table tbody td`) fixed-height/`nowrap` so the estimate holds.
+   The range math lives in `utils/virtualWindow.ts` (`computeWindowRange`).
    **Highlighting**: `setHighlightRules(rules)` stores the rules;
    `buildRow` adds the `hl-<class>` classes from `computeHighlightClasses`
    to the `<tr>` and prepends the `hl-emoji` span for emoji classes to the
@@ -342,6 +353,7 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/harParser.test.ts` - parsing, formatting, derived fields, timing normalization
 - `tests/filterParser.test.ts` - filter query parsing and matching
 - `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
+- `tests/virtualWindow.test.ts` - windowed-rendering range computation
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES

@@ -518,6 +518,16 @@ body.resizing-vertical * {
   cursor: pointer;
 }
 
+#requests-table tbody tr.spacer {
+  cursor: default;
+}
+
+#requests-table tbody tr.spacer td {
+  padding: 0;
+  border: 0;
+  max-width: none;
+}
+
 /* Highlight rule colors: one class per CSS named color (see NAMED_COLORS in
    src/utils/highlightRules.ts). Placed before :hover/.selected so selection
    stays visible on highlighted rows. */
