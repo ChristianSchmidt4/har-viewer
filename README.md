@@ -27,8 +27,13 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Header shows the archive's start time and total duration
 - Opens plain `.har` and gzip-compressed `.har.gz` files
 - Export of the currently filtered requests as a `.har` file
-- Resizable panes (drag the splitters)
+- Resizable panes (drag the splitters) and resizable request-table columns
+  (drag the `Path` or custom column header edge)
+- Large archives stay fast: only the visible rows of the request table are rendered
+- Clicking a row in the multi-select Timeline selects that request and shows its details
+- App version shown in the bottom-right corner
 - Responsive design (panels stack on narrow screens)
+- Written in strict-mode TypeScript and built with Vite
 
 ## Project Structure
 
@@ -36,25 +41,31 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 har_viewer/
 ├── src/
 │   ├── components/
-│   │   ├── FileDropZone.js   # Drag & drop / file-picker landing screen
-│   │   ├── RequestTable.js   # Filterable request list (left pane)
-│   │   ├── HighlightBar.js   # Highlight rule input below the request list
-│   │   └── DetailPanel.js    # Request/Response detail view (right pane)
+│   │   ├── FileDropZone.ts   # Drag & drop / file-picker landing screen
+│   │   ├── RequestTable.ts   # Filterable, windowed request list (left pane)
+│   │   ├── HighlightBar.ts   # Highlight rule input + custom columns below the list
+│   │   └── DetailPanel.ts    # Request/Response detail view and multi-select aggregate view (right pane)
+│   ├── types/
+│   │   └── har.ts            # Shared HAR raw/parsed type definitions
 │   ├── utils/
-│   │   ├── harParser.js      # HAR JSON -> structured entries
-│   │   ├── filterParser.js   # Request-table filter query engine
-│   │   ├── highlightRules.js # Highlight rule parsing, color/emoji classes
-│   │   ├── httpFormatter.js  # Raw HTTP text + syntax highlighting
-│   │   └── domUtils.js       # Shared DOM/string helpers
+│   │   ├── harParser.ts      # HAR JSON -> structured entries
+│   │   ├── filterParser.ts   # Request-table filter query engine
+│   │   ├── highlightRules.ts # Highlight rule parsing, color/emoji classes
+│   │   ├── httpFormatter.ts  # Raw HTTP text + syntax highlighting
+│   │   ├── aggregateStats.ts # Multi-select statistics
+│   │   ├── customColumns.ts  # Custom column persistence and evaluation
+│   │   ├── resizer.ts        # Drag-to-resize splitters
+│   │   ├── virtualWindow.ts  # Windowed (virtualized) row range math
+│   │   └── domUtils.ts       # Shared DOM/string helpers
 │   ├── styles/
 │   │   └── main.css          # All styling (drop screen + viewer)
-│   └── index.js              # Main entry point / app orchestration
-├── index.html           # App shell (loads /src/index.js as a module)
-├── docs/               # Documentation (incl. HAR format reference, sample.har)
-├── tests/              # Test files (mirrors src/ structure)
-├── .claude/            # Claude Code configuration
-├── .github/workflows/  # GitHub Actions
-└── dist/               # Build output (generated)
+│   └── index.ts              # Main entry point / app orchestration
+├── index.html                # App shell (loads /src/index.ts as a module)
+├── docs/                     # Documentation (incl. HAR format reference, sample.har)
+├── tests/                    # Jest tests (mirrors src/ structure)
+├── .claude/                  # Claude Code configuration
+├── .github/workflows/        # GitHub Actions
+└── dist/                     # Build output (generated)
 ```
 
 ## Getting Started
@@ -85,6 +96,13 @@ npm run build
 ```
 
 The build output will be in the `dist/` directory.
+
+### Type Checking and Tests
+
+```bash
+npm run typecheck   # strict TypeScript check
+npm test            # Jest unit tests
+```
 
 ## Using with Claude Code
 

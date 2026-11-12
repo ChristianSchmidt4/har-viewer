@@ -36,7 +36,9 @@ is needed for development. See [TypeScript](#typescript) below.
    also derives `host`, `path`, `protocol`, `contentType`, `relativeStartMs`
    (time since the first request in the archive) and normalized `timings`
    (`blocked`/`dns`/`connect`/`ssl`/`send`/`wait`/`receive`, with HAR's `-1`
-   "not applicable" sentinel normalized to `0`) per entry. Provides
+   "not applicable" sentinel normalized to `0`) per entry. `contentType` is `''` when the
+   response has neither a MIME type nor a body (`getContentType(mime, hasBody)`)
+   and `other` for a body with an unknown MIME type. Provides
    `formatBytes` / `formatTime` / `formatRelativeTime` / `formatDateTime` /
    `formatClockTime` (`HH:MM:SS.mmm`) / `formatDurationClock` (`HH:MM:SS.mmm`
    duration, used by the aggregate Stats panel).
@@ -134,7 +136,7 @@ is needed for development. See [TypeScript](#typescript) below.
    sides, each with independent Headers / Raw / Cookies / Syntax sub-tabs,
    plus Image (response side, `image/*`) and Font (response side,
    `contentType === 'font'`) preview tabs; state remembered per side across
-   selections), and
+   selections; the Syntax tab is hidden when that side has no body), and
    `renderMultiSelect(entries)` for 2+ selected requests, which replaces the
    Request/Response layout with an aggregate view with **Timeline** and
    **Stats** tabs (state remembered in `activeAggregateTab`):
@@ -189,6 +191,9 @@ is needed for development. See [TypeScript](#typescript) below.
   column on Enter when its expression is a valid `reqheader:`/`resheader:`/
   `reqcookie:`/`rescookie:` expression; the label is derived from it, and the
   list is persisted with `saveCustomColumns`.
+  The app version is shown in the bottom-right corner (`#app-version`, filled
+  in `DOMContentLoaded` from `package.json`'s `version` via a JSON import), so
+  bump `package.json`'s version to change what users see.
 
 ## Development Workflow with Claude Code
 
@@ -303,6 +308,10 @@ Note: user-defined columns are a different mechanism (see
 `customColumns.ts`); extend `evaluateCustomColumn` to support a new
 expression prefix.
 
+### Changing the App Version
+1. Edit `version` in `package.json`; the bottom-right `#app-version` label
+   picks it up automatically at startup.
+
 ### Adding a Highlight Color or Emoji
 - Color: add the name to `NAMED_COLORS` and a
   `#requests-table tbody tr.hl-<name>` rule in `main.css`, placed before the
@@ -364,6 +373,7 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/harParser.test.ts` - parsing, formatting, derived fields, timing normalization
 - `tests/filterParser.test.ts` - filter query parsing and matching
 - `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
+- `tests/highlightRules.test.ts` - highlight rule parsing and CSS color coverage
 - `tests/virtualWindow.test.ts` - windowed-rendering range computation
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
