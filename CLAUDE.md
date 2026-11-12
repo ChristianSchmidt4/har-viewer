@@ -395,6 +395,12 @@ uses `base: '/har-viewer/'` (see `vite.config.mjs`) because GitHub Pages
 serves the project at that sub-path; the dev server uses `/`. Static assets such
 as `public/favicon.svg` are copied to the dist root by Vite.
 
+GitHub Pages is wired up in `.github/workflows/ci-cd.yml`: the `deploy` job
+(main branch only, `contents: write`) publishes `dist/` to the `gh-pages`
+branch with `peaceiris/actions-gh-pages`. Pages must be set to serve from
+the `gh-pages` branch, and the app lives at
+https://christianschmidt4.github.io/har-viewer/.
+
 ## Browser Compatibility
 
 Targets modern browsers that support:

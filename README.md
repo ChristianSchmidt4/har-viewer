@@ -97,6 +97,14 @@ npm run build
 
 The build output will be in the `dist/` directory.
 
+### Deployment (GitHub Pages)
+
+The CI/CD workflow (`.github/workflows/ci-cd.yml`) runs tests and a build on every push and pull request to `main`. On pushes to `main`, the `deploy` job publishes `dist/` to the `gh-pages` branch via `peaceiris/actions-gh-pages`.
+
+The app is served at **https://christianschmidt4.github.io/har-viewer/**. The production build uses `base: '/har-viewer/'` in `vite.config.mjs`, so asset paths match that sub-path.
+
+One-time setup: in the repository's **Settings → Pages**, set **Source** to "Deploy from a branch", branch `gh-pages`, folder `/ (root)`. Also ensure **Settings → Actions → General → Workflow permissions** allows read and write for `GITHUB_TOKEN` (the deploy job also requests `contents: write`).
+
 ### Type Checking and Tests
 
 ```bash
