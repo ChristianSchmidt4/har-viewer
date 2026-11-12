@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: '.',
+  // GitHub Pages serves the project at /har-viewer/; dev server stays at /
+  base: command === 'build' ? '/har-viewer/' : '/',
   build: {
     outDir: 'dist',
     rollupOptions: {
@@ -20,4 +22,4 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
-});
+}));
