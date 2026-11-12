@@ -24,6 +24,15 @@
         "action": {
           "command": "echo 'File modified: $FILE_PATH'"
         }
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.github/hooks/minor-version-docs.mjs\""
+          }
+        ]
       }
     ],
     "PostToolBatch": [

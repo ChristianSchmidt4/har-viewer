@@ -17,6 +17,14 @@ commit. This includes (non-exhaustively):
 
 If unsure whether a change is doc-worthy, err toward updating this file.
 
+A shared hook (`.github/hooks/minor-version-docs.mjs`, registered for Copilot
+CLI in `.github/hooks/minor-version-docs.json` and for Claude Code in
+`.claude/settings.json`) watches edits to `package.json`. When the minor
+version rises relative to `HEAD` and `CHANGELOG.md` has no `## [x.y.z]`
+section yet, it prompts the agent to update `CHANGELOG.md`, `README.md` and
+`CLAUDE.md`. Bumps made outside the agent's edit tools (e.g. `npm version minor`)
+do not trigger it.
+
 ## Project Overview
 
 This is a client-side HTTP Archive (HAR) viewer inspired by Fiddler. A user

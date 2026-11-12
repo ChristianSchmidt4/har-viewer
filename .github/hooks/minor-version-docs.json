@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/minor-version-docs.mjs",
+        "timeoutSec": 30
+      }
+    ]
+  }
+}
