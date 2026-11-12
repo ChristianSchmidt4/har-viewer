@@ -151,7 +151,8 @@ class HarViewerApp {
         uncompressedSize: isGzipped ? new Blob([text]).size : null
       };
     } catch (error) {
-      throw new Error('Invalid JSON format');
+      console.error({error});
+      throw new Error('Invalid JSON format:' + (error instanceof Error ? error.message : ''));
     }
   }
 
