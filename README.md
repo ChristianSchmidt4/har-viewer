@@ -148,4 +148,8 @@ This viewer supports the HAR 1.2 specification:
 
 ## License
 
-MIT License - see LICENSE file for details.
+This project is licensed under a custom **non-commercial** license - see the [LICENSE.md](LICENSE.md) file for details.
+
+- **Free to use, copy, modify and share** for non-commercial purposes.
+- **No commercial use**: the software may not be sold or used for commercial purposes.
+- **As is, no warranty**: the software is provided without any warranty of any kind.
