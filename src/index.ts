@@ -141,7 +141,7 @@ class HarViewerApp {
   private async readFileAsJson(file: File): Promise<{ harData: HarData; uncompressedSize: number | null }> {
     const isGzipped = /\.gz$/i.test(file.name);
     const onProgress = (fraction: number) => this.showLoadProgress('Reading file…', fraction);
-    const text = isGzipped
+    const text: string = isGzipped
       ? await readGzipFileAsText(file, onProgress)
       : await readFileAsText(file, onProgress);
 
@@ -151,7 +151,7 @@ class HarViewerApp {
         uncompressedSize: isGzipped ? new Blob([text]).size : null
       };
     } catch (error) {
-      console.error({error});
+      console.error({error, text_length: text.length });
       throw new Error('Invalid JSON format:' + (error instanceof Error ? error.message : ''));
     }
   }
