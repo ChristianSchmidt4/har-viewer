@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HAR Viewer - Fiddler Style</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <script type="module" crossorigin src="/har-viewer/assets/main-DlcRs5D8.js"></script>
-  <link rel="stylesheet" crossorigin href="/har-viewer/assets/main-DiRVTxn7.css">
+  <script type="module" crossorigin src="/har-viewer/assets/main-CWhNy_m4.js"></script>
+  <link rel="stylesheet" crossorigin href="/har-viewer/assets/main-B_BxvRmt.css">
 </head>
 <body>
     <div id="app">
@@ -21,6 +21,12 @@
                 <p class="drop-or">or</p>
                 <button id="browse-btn" type="button">Select File…</button>
                 <input type="file" id="har-file-input" accept=".har,.har.gz,.gz,application/json,application/gzip" hidden />
+                <div id="load-progress" class="load-progress hidden" role="progressbar" aria-live="polite">
+                    <div id="load-progress-label" class="load-progress-label"></div>
+                    <div class="load-progress-track">
+                        <div id="load-progress-bar" class="load-progress-bar"></div>
+                    </div>
+                </div>
                 <p class="drop-privacy-note">Processed entirely in your browser — files are never uploaded.</p>
             </div>
         </div>
