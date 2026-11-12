@@ -1,7 +1,7 @@
 // Builds raw HTTP-wire-format text and lightweight syntax highlighting for
 // request/response bodies, used by the detail panes' "Raw" and "Syntax" tabs.
 import { escapeHtml } from './domUtils.js';
-import type { HarHeader, ParsedEntry, ParsedRequest } from '../types/har.js';
+import type { HarHeader, ParsedEntry, ParsedRequest } from '@/types/har';
 
 function headerLines(headers: HarHeader[] | undefined): string {
   return (headers || []).map(h => `${h.name}: ${h.value}`).join('\r\n');
@@ -96,7 +96,7 @@ function highlightMarkup(text: string): string {
   const escaped = escapeHtml(text);
   // Highlight tags (&lt;/?tag ... &gt;) and attribute names.
   return escaped.replace(
-    /(&lt;\/?[a-zA-Z][\w:-]*)|((?:\s)[\w-]+)(=)|(&gt;)/g,
+    /(&lt;\/?[a-zA-Z][\w:-]*)|(\s[\w-]+)(=)|(&gt;)/g,
     (match, tagStart, attrName, equals, tagEnd) => {
       if (tagStart) return `<span class="syntax-tag">${tagStart}</span>`;
       if (attrName && equals) return `<span class="syntax-attr">${attrName}</span>=`;

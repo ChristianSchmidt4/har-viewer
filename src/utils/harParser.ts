@@ -12,7 +12,7 @@ import type {
   ParsedContent,
   ParsedTimings,
   ParsedHar
-} from '../types/har.js';
+} from '@/types/har';
 
 export class HarParser {
   parse(harData: HarData): ParsedHar {

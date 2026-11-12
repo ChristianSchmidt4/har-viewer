@@ -32,10 +32,3 @@ export function truncateText(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '\n\n... (truncated)';
 }
-
-// Creates an element from an HTML string (first element child only).
-export function createElementFromHtml(html: string): Element | null {
-  const template = document.createElement('template');
-  template.innerHTML = html.trim();
-  return template.content.firstElementChild;
-}

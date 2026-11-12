@@ -2,12 +2,12 @@
 // / Response sides, or - when multiple rows are multi-selected in the
 // request table - an aggregate view with Timeline (waterfall) and Stats
 // tabs, mirroring Fiddler's single-inspector and "Statistics" views.
-import { HarParser } from '../utils/harParser.js';
-import { escapeHtml } from '../utils/domUtils.js';
-import { buildRawRequest, buildRawResponse, highlightSyntax } from '../utils/httpFormatter.js';
-import { makeResizer } from '../utils/resizer.js';
-import { computeAggregateStats } from '../utils/aggregateStats.js';
-import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
+import { HarParser } from '@/utils/harParser';
+import { escapeHtml } from '@/utils/domUtils';
+import { buildRawRequest, buildRawResponse, highlightSyntax } from '@/utils/httpFormatter';
+import { makeResizer } from '@/utils/resizer';
+import { computeAggregateStats } from '@/utils/aggregateStats';
+import type { HarHeader, HarCookie, ParsedEntry } from '@/types/har';
 
 type Side = 'request' | 'response';
 type SubTabKey = 'headers' | 'raw' | 'cookies' | 'syntax' | 'image' | 'font';

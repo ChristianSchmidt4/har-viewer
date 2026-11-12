@@ -7,7 +7,7 @@
 //
 // Stored in localStorage under the given key, typed as CustomColumn[].
 
-import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
+import type { HarHeader, HarCookie, ParsedEntry } from '@/types/har';
 
 export interface CustomColumn {
   id: string;             // stable unique id

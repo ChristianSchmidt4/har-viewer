@@ -1,8 +1,8 @@
 // Input below the request table for highlight rules (see highlightRules.ts).
 // Enter adds a rule; each active rule is shown as a removable chip.
-import { parseHighlightRule, HIGHLIGHT_EMOJIS, NAMED_COLORS, TEXT_STYLE_CLASSES, HIGHLIGHT_SEPARATOR } from '../utils/highlightRules.js';
-import type { HighlightRule } from '../utils/highlightRules.js';
-import { escapeHtml } from '../utils/domUtils.js';
+import { parseHighlightRule, HIGHLIGHT_EMOJIS, NAMED_COLORS, TEXT_STYLE_CLASSES, HIGHLIGHT_SEPARATOR } from '@/utils/highlightRules';
+import type { HighlightRule } from '@/utils/highlightRules';
+import { escapeHtml } from '@/utils/domUtils';
 
 export interface HighlightBarOptions {
   onChange: (rules: HighlightRule[]) => void;
@@ -11,8 +11,8 @@ export interface HighlightBarOptions {
 const ERROR_DISPLAY_MS = 4000;
 
 export class HighlightBar {
-  private onChange: (rules: HighlightRule[]) => void;
-  private rules: HighlightRule[];
+  private readonly onChange: (rules: HighlightRule[]) => void;
+  private readonly rules: HighlightRule[];
 
   private inputEl: HTMLInputElement;
   private hintEl: HTMLElement;
@@ -52,11 +52,6 @@ export class HighlightBar {
       this.commit();
     });
   }
-
-  getRules(): HighlightRule[] {
-    return [...this.rules];
-  }
-
   private addRule(text: string): void {
     const result = parseHighlightRule(text);
     if ('error' in result) {

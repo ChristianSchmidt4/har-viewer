@@ -5,16 +5,16 @@
 //
 // Custom columns can be added via setCustomColumns() — they render as
 // additional <th>/<td> pairs after the built-in columns.
-import { HarParser } from '../utils/harParser.js';
-import { filterEntries } from '../utils/filterParser.js';
-import { escapeHtml, truncateText } from '../utils/domUtils.js';
-import { evaluateCustomColumn } from '../utils/customColumns.js';
-import { computeHighlightClasses, highlightClassName, HIGHLIGHT_EMOJIS } from '../utils/highlightRules.js';
-import { computeWindowRange } from '../utils/virtualWindow.js';
-import type { WindowRange } from '../utils/virtualWindow.js';
-import type { ParsedEntry } from '../types/har.js';
-import type { CustomColumn } from '../utils/customColumns.js';
-import type { HighlightRule } from '../utils/highlightRules.js';
+import { HarParser } from '@/utils/harParser';
+import { filterEntries } from '@/utils/filterParser';
+import { escapeHtml, truncateText } from '@/utils/domUtils';
+import { evaluateCustomColumn } from '@/utils/customColumns';
+import { computeHighlightClasses, highlightClassName, HIGHLIGHT_EMOJIS } from '@/utils/highlightRules';
+import { computeWindowRange } from '@/utils/virtualWindow';
+import type { WindowRange } from '@/utils/virtualWindow';
+import type { ParsedEntry } from '@/types/har';
+import type { CustomColumn } from '@/utils/customColumns';
+import type { HighlightRule } from '@/utils/highlightRules';
 
 type WidthUnit = "px" | "em" | "rem" | "ch"
 interface Column {
@@ -53,19 +53,19 @@ export interface RequestTableOptions {
 }
 
 export class RequestTable {
-  private onSelect: (entry: ParsedEntry) => void;
-  private onMultiSelect: (entries: ParsedEntry[]) => void;
-  private harParser: HarParser;
+  private readonly onSelect: (entry: ParsedEntry) => void;
+  private readonly onMultiSelect: (entries: ParsedEntry[]) => void;
+  private readonly scrollEl: HTMLElement;
 
+  private harParser: HarParser;
   private allEntries: ParsedEntry[];
   private visibleEntries: ParsedEntry[];
   private selectedEntryIds: Set<number>;
   private lastSelectedEntryId: number | null;
-  private filterDebounceTimer: ReturnType<typeof setTimeout> | undefined;
 
+  private filterDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   private filterInputEl: HTMLInputElement;
   private filterHintEl: HTMLElement;
-  private scrollEl: HTMLElement;
   private tableBodyEl: HTMLElement;
   private resultCountEl: HTMLElement;
   private theadEl: HTMLElement;
@@ -78,7 +78,7 @@ export class RequestTable {
   private rowHeight: number;
   private renderedRange: WindowRange | null;
 
-  private onCustomColumnRemove?: (columnId: string) => void;
+  private readonly onCustomColumnRemove?: (columnId: string) => void;
 
   constructor({ onSelect, onMultiSelect, onCustomColumnRemove }: RequestTableOptions) {
     this.onSelect = onSelect;

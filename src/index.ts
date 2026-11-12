@@ -1,12 +1,11 @@
-import { HarParser } from './utils/harParser.js';
-import { FileDropZone } from './components/FileDropZone.js';
-import { RequestTable } from './components/RequestTable.js';
-import { HighlightBar } from './components/HighlightBar.js';
-import { DetailPanel } from './components/DetailPanel.js';
-import { makeResizer } from './utils/resizer.js';
-import { loadCustomColumns, saveCustomColumns, addCustomColumn, removeCustomColumn } from './utils/customColumns.js';
-import type { HarData, ParsedEntry } from './types/har.js';
-import type { CustomColumn } from './utils/customColumns.js';
+import {HarParser} from './utils/harParser.js';
+import {FileDropZone} from './components/FileDropZone.js';
+import {RequestTable} from './components/RequestTable.js';
+import {HighlightBar} from './components/HighlightBar.js';
+import {DetailPanel} from './components/DetailPanel.js';
+import {makeResizer} from './utils/resizer.js';
+import {addCustomColumn, loadCustomColumns, removeCustomColumn, saveCustomColumns} from './utils/customColumns.js';
+import type {HarData, ParsedEntry} from './types/har.js';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.

@@ -30,7 +30,7 @@
 //   reqheader:user-agent=chromium
 //   reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id
 //   (status:>=400 or duration:>500) and -type:image
-import type { HarHeader, HarCookie, ParsedEntry } from '../types/har.js';
+import type { HarHeader, HarCookie, ParsedEntry } from '@/types/har';
 
 type FieldName = 'method' | 'status' | 'host' | 'path' | 'protocol' | 'contentType' | 'duration' | 'size';
 type HeaderCookieSide = 'reqHeader' | 'resHeader' | 'reqCookie' | 'resCookie';

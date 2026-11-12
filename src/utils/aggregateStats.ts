@@ -1,6 +1,6 @@
 // Computes Fiddler-style aggregate statistics across a set of selected HAR
 // entries, for the detail panel's multi-select "Stats" tab.
-import type { ParsedEntry } from '../types/har.js';
+import type { ParsedEntry } from '@/types/har';
 
 export interface AggregateStats {
   requestCount: number;

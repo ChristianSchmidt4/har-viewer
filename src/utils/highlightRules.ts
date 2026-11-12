@@ -22,8 +22,8 @@
 //   (status:404 or status:500) => red underline error
 //   reqheader:authorization => lock
 //   duration:>2s => toggle orange italic fire
-import { compileFilterQuery } from './filterParser.js';
-import type { ParsedEntry } from '../types/har.js';
+import { compileFilterQuery } from '@/utils/filterParser';
+import type { ParsedEntry } from '@/types/har';
 
 export type HighlightAction = 'toggle' | 'add' | 'remove';
 

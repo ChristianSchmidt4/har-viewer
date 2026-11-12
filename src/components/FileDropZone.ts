@@ -9,9 +9,9 @@ export interface FileDropZoneOptions {
 }
 
 export class FileDropZone {
-  private onFileSelected: (file: File) => void;
-  private onError: (message: string) => void;
-  private screenEl: HTMLElement;
+  private readonly onFileSelected: (file: File) => void;
+  private readonly onError: (message: string) => void;
+  private readonly screenEl: HTMLElement;
   private dropPanelEl: HTMLElement;
   private fileInputEl: HTMLInputElement;
   private browseBtnEl: HTMLElement;
