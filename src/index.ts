@@ -6,6 +6,7 @@ import {DetailPanel} from './components/DetailPanel.js';
 import {makeResizer} from './utils/resizer.js';
 import {addCustomColumn, loadCustomColumns, removeCustomColumn, saveCustomColumns} from './utils/customColumns.js';
 import type {HarData, ParsedEntry} from './types/har.js';
+import pkg from '../package.json';
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
@@ -254,6 +255,8 @@ class HarViewerApp {
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  const versionEl = document.getElementById('app-version');
+  if (versionEl) versionEl.textContent = `v${pkg.version}`;
   new HarViewerApp();
 });
 
