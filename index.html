@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAR Viewer - Fiddler Style</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script type="module" crossorigin src="/assets/main--bQwyFna.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-DiRVTxn7.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Landing screen: shown until a HAR file is loaded. Drag & drop
+             or the Browse button both read the file locally; nothing is
+             ever sent to a server. -->
+        <div id="drop-screen">
+            <div id="drop-panel">
+                <div class="drop-icon">⇩</div>
+                <h1>HAR Viewer</h1>
+                <p class="drop-subtitle">Drop a .har or .har.gz file here</p>
+                <p class="drop-or">or</p>
+                <button id="browse-btn" type="button">Select File…</button>
+                <input type="file" id="har-file-input" accept=".har,.har.gz,.gz,application/json,application/gzip" hidden />
+                <p class="drop-privacy-note">Processed entirely in your browser — files are never uploaded.</p>
+            </div>
+        </div>
+
+        <!-- Main viewer: hidden until a file is loaded. -->
+        <div id="har-content" class="hidden">
+            <header class="app-header">
+                <div class="app-title">HAR Viewer</div>
+                <div id="file-info"></div>
+                <div id="time-range" class="time-range"></div>
+                <div class="header-actions">
+                    <button id="load-new-btn" type="button">Load New File</button>
+                    <button id="export-btn" type="button" title="Export the currently filtered requests as a .har (JSON) file">Export</button>
+                </div>
+            </header>
+
+            <div class="main-layout">
+                <div id="request-list-container" class="request-list-container">
+                    <div class="filter-bar">
+                        <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
+                        <span id="result-count" class="result-count"></span>
+                        <div id="custom-col-controls" class="custom-col-controls">
+                            <input type="text" id="custom-col-input" placeholder="Add column, e.g. reqheader:X-Trace" />
+                            <span id="custom-col-hint" class="custom-col-hint">
+                                Examples: <code>reqheader:X-Trace</code>, <code>resheader:Content-Encoding</code>,
+                                <code>reqcookie:sessionid</code>, <code>rescookie:track</code>
+                            </span>
+                        </div>
+                        <div id="filter-hint" class="filter-hint">
+                            Syntax: <code>field:value</code> · fields: <code>method</code>, <code>status</code>,
+                            <code>host</code>, <code>path</code>, <code>protocol</code>, <code>type</code>,
+                            <code>duration</code>, <code>size</code> · prefix <code>-</code> or <code>not</code> to negate ·
+                            numeric fields support <code>&gt;</code> <code>&lt;</code> <code>&gt;=</code> <code>&lt;=</code> ·
+                            combine with <code>and</code> / <code>or</code> / <code>(...)</code> ·
+                            <code>reqheader:name=value</code>, <code>resheader:name=value</code>,
+                            <code>reqcookie:name=value</code>, <code>rescookie:name=value</code> (omit
+                            <code>=value</code> to just check presence) · plain text matches the URL
+                            <br />
+                            Examples: <code>status:200 method:GET</code> ·
+                            <code>duration:&gt;100 size:&lt;10kb</code> ·
+                            <code>(status:&gt;=400 or duration:&gt;500) and -type:image</code> ·
+                            <code>reqheader:user-agent=chromium</code> ·
+                            <code>reqheader:x-execution-id=ADFEEx01 or resheader:x-execution-id</code> ·
+                            <code>rescookie:track and status:200</code>
+                        </div>
+                    </div>
+                    <div class="request-table-scroll">
+                        <table id="requests-table">
+                            <thead id="requests-table-thead">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Code</th>
+                                    <th>Protocol</th>
+                                    <th>Host</th>
+                                    <th>Path</th>
+                                    <th>Body Size</th>
+                                    <th>Content-Type</th>
+                                    <th>Duration</th>
+                                    <th>Start</th>
+                                </tr>
+                            </thead>
+                            <tbody id="requests-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="highlight-bar">
+                        <div class="highlight-input-row">
+                            <input type="text" id="highlight-input" placeholder="Highlight e.g. status:>=400 => add red" />
+                            <span id="highlight-error" class="highlight-error"></span>
+                        </div>
+                        <div id="highlight-rules" class="highlight-rules"></div>
+                        <div id="highlight-hint" class="filter-hint hint-above"></div>
+                    </div>
+                </div>
+
+                <div id="main-splitter" class="splitter splitter-vertical"></div>
+
+                <div id="detail-panel" class="detail-panel">
+                    <div id="detail-empty-state" class="detail-empty-state">
+                        Select a request to inspect its details.
+                    </div>
+                    <div id="detail-content" class="hidden"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="app-version" class="app-version"></div>
+</body>
+</html>
