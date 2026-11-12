@@ -75,6 +75,11 @@ is needed for development. See [TypeScript](#typescript) below.
 8. **virtualWindow** (`virtualWindow.ts`) - `computeWindowRange(scrollTop,
    viewportHeight, rowHeight, total, overscan)` returns the `[start, end)`
    row slice to render for a fixed-row-height list (used by `RequestTable`).
+9. **fileLoader** (`fileLoader.ts`) - `readFileAsText(file, onProgress)` and
+   `readGzipFileAsText(file, onProgress)` read a local file with progress
+   reported in [0, 1] (`.gz` progress is on compressed bytes), plus
+   `nextPaint()`, which yields so progress UI can repaint before a
+   synchronous step.
 
 ### Types (`src/types/`)
 - **har.ts** - Shared TypeScript interfaces for the raw HAR 1.2 JSON shape
@@ -222,8 +227,13 @@ Follow these patterns when adding new features:
 ### Data Flow
 1. User drags a file onto `FileDropZone` or picks one via "Select File…"
    (`.har`, `.har.gz`/`.gz` or JSON)
-2. `index.ts` reads the file locally with `FileReader` (gunzipping first for
-   `.gz`) and parses the JSON
+2. `index.ts` reads the file locally via `utils/fileLoader.ts` (gunzipping first for
+   `.gz`) and parses the JSON. Loading shows a progress bar
+   (`#load-progress`, in the drop panel) with a determinate read phase
+   (`FileReader` progress; compressed bytes for `.gz`) and indeterminate
+   "Parsing…"/"Building request table…" phases, separated by `nextPaint()`
+   yields so the bar repaints. `JSON.parse` itself is synchronous and still
+   blocks the main thread for the duration of the parse
 3. `HarParser.parse` turns the raw HAR JSON into structured entries
 4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
    starts in its empty state
@@ -375,6 +385,8 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
 - `tests/highlightRules.test.ts` - highlight rule parsing and CSS color coverage
 - `tests/virtualWindow.test.ts` - windowed-rendering range computation
+- `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
+- `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES

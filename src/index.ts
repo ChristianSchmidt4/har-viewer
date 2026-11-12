@@ -5,6 +5,7 @@ import {HighlightBar} from './components/HighlightBar.js';
 import {DetailPanel} from './components/DetailPanel.js';
 import {makeResizer} from './utils/resizer.js';
 import {addCustomColumn, loadCustomColumns, removeCustomColumn, saveCustomColumns} from './utils/customColumns.js';
+import {nextPaint, readFileAsText, readGzipFileAsText} from './utils/fileLoader.js';
 import type {HarData, ParsedEntry} from './types/har.js';
 import pkg from '../package.json';
 
@@ -83,12 +84,18 @@ class HarViewerApp {
   // parsing the JSON.
   private async handleFile(file: File): Promise<void> {
     try {
+      this.showLoadProgress('Reading file…', 0);
       const { harData, uncompressedSize } = await this.readFileAsJson(file);
+
+      // Yield so the browser can paint the bar before the synchronous parse.
+      this.showLoadProgress('Parsing…');
+      await nextPaint();
       this.currentHarData = harData;
       this.currentFileName = file.name;
-
       const parsedData = this.harParser.parse(harData);
 
+      this.showLoadProgress('Building request table…');
+      await nextPaint();
       this.dropZone.hide();
       document.getElementById('har-content')!.classList.remove('hidden');
       this.displayFileInfo(file.name, file.size, uncompressedSize);
@@ -104,14 +111,39 @@ class HarViewerApp {
           ? message
           : 'Failed to process HAR file. Please ensure it is a valid HAR (JSON) file.'
       );
+    } finally {
+      this.hideLoadProgress();
     }
+  }
+
+  // fraction in [0, 1] shows a determinate bar; omit it for an indeterminate
+  // (sliding) bar when the duration of the step is unknown.
+  private showLoadProgress(label: string, fraction?: number): void {
+    const progressEl = document.getElementById('load-progress')!;
+    const barEl = document.getElementById('load-progress-bar')!;
+    progressEl.classList.remove('hidden');
+    document.getElementById('load-progress-label')!.textContent = label;
+    if (fraction === undefined) {
+      barEl.classList.add('indeterminate');
+    } else {
+      barEl.classList.remove('indeterminate');
+      barEl.style.width = `${Math.min(100, Math.round(fraction * 100))}%`;
+    }
+  }
+
+  private hideLoadProgress(): void {
+    document.getElementById('load-progress')!.classList.add('hidden');
+    const barEl = document.getElementById('load-progress-bar')!;
+    barEl.classList.remove('indeterminate');
+    barEl.style.width = '0';
   }
 
   private async readFileAsJson(file: File): Promise<{ harData: HarData; uncompressedSize: number | null }> {
     const isGzipped = /\.gz$/i.test(file.name);
+    const onProgress = (fraction: number) => this.showLoadProgress('Reading file…', fraction);
     const text = isGzipped
-      ? await this.readGzipFileAsText(file)
-      : await this.readFileAsText(file);
+      ? await readGzipFileAsText(file, onProgress)
+      : await readFileAsText(file, onProgress);
 
     try {
       return {
@@ -121,20 +153,6 @@ class HarViewerApp {
     } catch (error) {
       throw new Error('Invalid JSON format');
     }
-  }
-
-  private readFileAsText(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => resolve(event.target!.result as string);
-      reader.onerror = () => reject(new Error('Error reading file'));
-      reader.readAsText(file);
-    });
-  }
-
-  private async readGzipFileAsText(file: File): Promise<string> {
-    const decompressedStream = file.stream().pipeThrough(new DecompressionStream('gzip'));
-    return new Response(decompressedStream).text();
   }
 
   private displayFileInfo(fileName: string, fileSize: number, uncompressedSize: number | null): void {

@@ -25,7 +25,7 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Multi-select (Ctrl/Cmd- or Shift-click) shows an aggregate view with a
   **Timeline** waterfall and a **Stats** summary
 - Header shows the archive's start time and total duration
-- Opens plain `.har` and gzip-compressed `.har.gz` files
+- Opens plain `.har` and gzip-compressed `.har.gz` files, with a progress bar while large files load
 - Export of the currently filtered requests as a `.har` file
 - Resizable panes (drag the splitters) and resizable request-table columns
   (drag the `Path` or custom column header edge)
@@ -56,7 +56,8 @@ har_viewer/
 │   │   ├── customColumns.ts  # Custom column persistence and evaluation
 │   │   ├── resizer.ts        # Drag-to-resize splitters
 │   │   ├── virtualWindow.ts  # Windowed (virtualized) row range math
-│   │   └── domUtils.ts       # Shared DOM/string helpers
+│   │   ├── domUtils.ts       # Shared DOM/string helpers
+│   │   └── fileLoader.ts     # Local file reading (incl. gzip) with progress reporting
 │   ├── styles/
 │   │   └── main.css          # All styling (drop screen + viewer)
 │   └── index.ts              # Main entry point / app orchestration

@@ -20,6 +20,12 @@
                 <p class="drop-or">or</p>
                 <button id="browse-btn" type="button">Select File…</button>
                 <input type="file" id="har-file-input" accept=".har,.har.gz,.gz,application/json,application/gzip" hidden />
+                <div id="load-progress" class="load-progress hidden" role="progressbar" aria-live="polite">
+                    <div id="load-progress-label" class="load-progress-label"></div>
+                    <div class="load-progress-track">
+                        <div id="load-progress-bar" class="load-progress-bar"></div>
+                    </div>
+                </div>
                 <p class="drop-privacy-note">Processed entirely in your browser — files are never uploaded.</p>
             </div>
         </div>

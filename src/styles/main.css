@@ -119,6 +119,45 @@ button:hover {
   background-color: #2980b9;
 }
 
+.load-progress {
+  margin-top: 1.25rem;
+}
+
+.load-progress-label {
+  font-size: 0.85rem;
+  color: var(--text-color);
+  margin-bottom: 0.4rem;
+}
+
+.load-progress-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background-color: var(--light-gray);
+  overflow: hidden;
+}
+
+.load-progress-bar {
+  height: 100%;
+  width: 0;
+  background-color: var(--secondary-color);
+  transition: width 0.1s linear;
+}
+
+/* Indeterminate state (parsing / building): a sliding block that uses a
+   transform so it keeps animating on the compositor even while the main
+   thread is busy inside JSON.parse. */
+.load-progress-bar.indeterminate {
+  width: 35%;
+  transition: none;
+  animation: load-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes load-progress-slide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(290%); }
+}
+
 .drop-privacy-note {
   margin-top: 1.5rem;
   font-size: 0.8rem;
