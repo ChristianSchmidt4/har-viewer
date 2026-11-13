@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HAR Viewer - Fiddler Style</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <script type="module" crossorigin src="/har-viewer/assets/main-C8rbA_Hs.js"></script>
-  <link rel="stylesheet" crossorigin href="/har-viewer/assets/main-fz3g8RUj.css">
+  <script type="module" crossorigin src="/har-viewer/assets/main-1zf522wt.js"></script>
+  <link rel="stylesheet" crossorigin href="/har-viewer/assets/main-bkAMisf6.css">
 </head>
 <body>
     <div id="app">
@@ -69,6 +69,7 @@
                             <code>rescookie:track and status:200</code>
                         </div>
                     </div>
+                    <div class="request-table-area">
                     <div class="request-table-scroll">
                         <table id="requests-table">
                             <thead id="requests-table-thead">
@@ -86,6 +87,8 @@
                             </thead>
                             <tbody id="requests-table-body"></tbody>
                         </table>
+                    </div>
+                    <div id="filter-busy" class="filter-busy" role="status" hidden><span class="spinner" aria-hidden="true"></span><span id="filter-busy-label">Filtering…</span></div>
                     </div>
                     <div class="highlight-bar">
                         <div class="highlight-input-row">
