@@ -5,9 +5,12 @@ import {HighlightBar} from './components/HighlightBar.js';
 import {DetailPanel} from './components/DetailPanel.js';
 import {makeResizer} from './utils/resizer.js';
 import {addCustomColumn, loadCustomColumns, removeCustomColumn, saveCustomColumns} from './utils/customColumns.js';
-import {nextPaint, readFileAsText, readGzipFileAsText} from './utils/fileLoader.js';
-import type {HarData, ParsedEntry} from './types/har.js';
+import {nextPaint, parseJsonFileStreaming} from './utils/fileLoader.js';
+import type {HarData, HarEntryRaw, InvalidItem, ParsedEntry} from './types/har.js';
 import pkg from '../package.json';
+
+// Number of log entries parsed and rendered per progressive batch.
+const BATCH_SIZE = 1000;
 
 // Main application class - orchestrates loading a HAR file locally and
 // wiring the drop zone, request table and detail panel together.
@@ -78,31 +81,84 @@ class HarViewerApp {
     console.log('HAR Viewer App initialized');
   }
 
-  // Reads the File object locally via FileReader - the file is never sent
-  // to any server, only parsed in-memory in the browser. Transparently
-  // gunzips .har.gz / .gz files via the native DecompressionStream before
-  // parsing the JSON.
+  // Streams the File object locally - the file is never sent to any server,
+  // only parsed in-memory in the browser. Transparently gunzips .har.gz / .gz
+  // files via the native DecompressionStream while reading. Entries are parsed
+  // and rendered in batches (BATCH_SIZE), so the table is usable early.
   private async handleFile(file: File): Promise<void> {
-    try {
-      this.showLoadProgress('Reading file…', 0);
-      const { harData, uncompressedSize } = await this.readFileAsJson(file);
+    const loadedEntries: ParsedEntry[] = [];
+    let firstStart: number | null = null;
+    let tableStarted = false;
+    let lastFraction = 0;
 
-      // Yield so the browser can paint the bar before the synchronous parse.
-      this.showLoadProgress('Parsing…');
-      await nextPaint();
-      this.currentHarData = harData;
-      this.currentFileName = file.name;
-      const parsedData = this.harParser.parse(harData);
-
-      this.showLoadProgress('Building request table…');
-      await nextPaint();
+    const showProgressInfo = () => {
+      const pct = Math.round(lastFraction * 100);
+      this.displayFileInfo(file.name, file.size, null, `loading… ${loadedEntries.length} requests, ${pct}% read`);
+    };
+    const startTable = () => {
       this.dropZone.hide();
       document.getElementById('har-content')!.classList.remove('hidden');
-      this.displayFileInfo(file.name, file.size, uncompressedSize);
-
-      this.requestTable.setEntries(parsedData.entries);
       this.detailPanel.showEmptyState();
-      this.displayTimeRange(parsedData.entries);
+      tableStarted = true;
+    };
+
+    try {
+      this.currentHarData = null;
+      this.currentFileName = file.name;
+      this.showLoadProgress('Reading file…', 0);
+
+      const onProgress = (fraction: number) => {
+        lastFraction = fraction;
+        if (tableStarted) {
+          showProgressInfo();
+        } else {
+          this.showLoadProgress('Reading file…', fraction);
+        }
+      };
+
+      const onBatch = async (items: unknown[]): Promise<void> => {
+        const batch = this.harParser.parseEntries(items as Array<HarEntryRaw | InvalidItem>, loadedEntries.length);
+
+        // Relative times are measured from the earliest request seen so far.
+        const batchStart = this.harParser.earliestStart(batch);
+        if (batchStart !== null && (firstStart === null || batchStart < firstStart)) {
+          firstStart = batchStart;
+          this.harParser.assignRelativeTimings(loadedEntries, firstStart);
+        }
+        if (firstStart !== null) {
+          this.harParser.assignRelativeTimings(batch, firstStart);
+        }
+        for (const entry of batch) loadedEntries.push(entry);
+
+        if (!tableStarted) {
+          startTable();
+          this.requestTable.setEntries(batch);
+        } else {
+          this.requestTable.appendEntries(batch);
+        }
+        showProgressInfo();
+        // Let the browser paint the new rows before the next chunk is parsed.
+        await nextPaint();
+      };
+
+      const { value, uncompressedSize } = await parseJsonFileStreaming(
+        file,
+        /\.gz$/i.test(file.name),
+        onProgress,
+        { batchSize: BATCH_SIZE, onBatch }
+      );
+      const harData = value as HarData;
+      if (!harData || !harData.log) {
+        throw new Error('Invalid HAR format: Missing log object');
+      }
+
+      if (!tableStarted) {
+        startTable();
+        this.requestTable.setEntries([]);
+      }
+      this.currentHarData = harData;
+      this.displayFileInfo(file.name, file.size, uncompressedSize);
+      this.displayTimeRange(loadedEntries);
     } catch (error) {
       console.error('Error processing HAR file:', error);
       const message = error instanceof Error ? error.message : '';
@@ -138,30 +194,17 @@ class HarViewerApp {
     barEl.style.width = '0';
   }
 
-  private async readFileAsJson(file: File): Promise<{ harData: HarData; uncompressedSize: number | null }> {
-    const isGzipped = /\.gz$/i.test(file.name);
-    const onProgress = (fraction: number) => this.showLoadProgress('Reading file…', fraction);
-    const text: string = isGzipped
-      ? await readGzipFileAsText(file, onProgress)
-      : await readFileAsText(file, onProgress);
-
-    try {
-      return {
-        harData: JSON.parse(text),
-        uncompressedSize: isGzipped ? new Blob([text]).size : null
-      };
-    } catch (error) {
-      console.error({error, text_length: text.length });
-      throw new Error('Invalid JSON format:' + (error instanceof Error ? error.message : ''));
-    }
-  }
-
-  private displayFileInfo(fileName: string, fileSize: number, uncompressedSize: number | null): void {
+  private displayFileInfo(
+    fileName: string,
+    fileSize: number,
+    uncompressedSize: number | null,
+    status?: string
+  ): void {
     const fileInfoDiv = document.getElementById('file-info')!;
     const sizeText = uncompressedSize != null
       ? `${this.harParser.formatBytes(fileSize)} compressed, ${this.harParser.formatBytes(uncompressedSize)} uncompressed`
       : this.harParser.formatBytes(fileSize);
-    fileInfoDiv.textContent = `${fileName} (${sizeText})`;
+    fileInfoDiv.textContent = `${fileName} (${sizeText})${status ? ` – ${status}` : ''}`;
   }
 
   private resetToDropScreen(): void {
@@ -202,7 +245,11 @@ class HarViewerApp {
       return;
     }
 
-    const visibleIds = new Set(this.requestTable.getVisibleEntries().map(entry => entry.id));
+    const visibleIds = new Set(
+      this.requestTable.getVisibleEntries()
+        .filter(entry => !entry.invalid)
+        .map(entry => entry.id)
+    );
     const filteredHarData: HarData = {
       ...this.currentHarData,
       log: {

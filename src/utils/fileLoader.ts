@@ -1,6 +1,8 @@
 // Local file reading helpers with progress reporting. Files are read in the
 // browser only - nothing is ever uploaded.
 
+import { parseJsonWithArray, type ArraySplitOptions } from './jsonArraySplitter.js';
+
 export type ProgressCallback = (fraction: number) => void;
 
 // Resolves after the browser has painted the current frame, so progress UI
@@ -15,10 +17,53 @@ export function readFileAsText(file: Blob, onProgress: ProgressCallback): Promis
     reader.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) onProgress(event.loaded / event.total);
     };
-    reader.onload = (event) => resolve(event.target!.result as string);
+    reader.onload = (event) => {
+      resolve(event.target!.result as string);
+    };
     reader.onerror = () => reject(new Error('Error reading file'));
     reader.readAsText(file);
   });
+}
+
+const countBytes = (onChunk: (byteLength: number) => void) =>
+  new TransformStream<BufferSource, BufferSource>({
+    transform(chunk, controller) {
+      onChunk(chunk.byteLength);
+      controller.enqueue(chunk);
+    }
+  });
+
+// Reads a (optionally gzipped) JSON file in chunks and parses it without ever
+// joining the whole text: the HAR log.entries items are parsed one by one
+// (see jsonArraySplitter.ts). Progress is measured on the compressed bytes read.
+export async function parseJsonFileStreaming(
+  file: Blob,
+  isGzipped: boolean,
+  onProgress: ProgressCallback,
+  options: ArraySplitOptions = {}
+): Promise<{ value: unknown; uncompressedSize: number | null }> {
+  let compressedRead = 0;
+  let uncompressedSize = 0;
+
+  let source: ReadableStream<BufferSource> = file.stream().pipeThrough(
+    countBytes((n) => {
+      compressedRead += n;
+      if (file.size > 0) onProgress(compressedRead / file.size);
+    })
+  );
+  if (isGzipped) {
+    source = source
+      .pipeThrough(new DecompressionStream('gzip'))
+      .pipeThrough(countBytes((n) => { uncompressedSize += n; }));
+  }
+
+  const reader = source.pipeThrough(new TextDecoderStream()).getReader();
+  const value = await parseJsonWithArray(reader, ['log', 'entries'], options);
+
+  return {
+    value,
+    uncompressedSize: isGzipped ? uncompressedSize : null
+  };
 }
 
 // Gunzips a file and returns its text. Progress is measured on the

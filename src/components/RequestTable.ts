@@ -186,6 +186,13 @@ export class RequestTable {
     this.applyFilter();
   }
 
+  // Adds a further batch of entries (progressive loading) without touching
+  // the selection or scroll position.
+  appendEntries(entries: ParsedEntry[]): void {
+    for (const entry of entries) this.allEntries.push(entry);
+    this.applyFilter();
+  }
+
   setCustomColumns(columns: CustomColumn[]): void {
     this.customColumns = columns;
     this.renderHeader();
@@ -347,12 +354,18 @@ export class RequestTable {
       return `<td class="col-custom" title="${escapeHtml(value)}">${escapeHtml(value || '—')}</td>`;
     }).join('');
 
+    const invalidReason = entry.invalid ? `⚠ invalid entry: ${entry.invalid.reason}` : '';
+    if (entry.invalid) {
+      row.classList.add('invalid-entry');
+    }
+    const pathText = entry.invalid ? invalidReason : entry.path;
+
     row.innerHTML = `
       <td class="col-index">${emojiPrefix}${entry.id + 1}</td>
       <td class="col-status ${statusClass}">${status || '—'}</td>
       <td class="col-protocol">${escapeHtml(entry.protocol)}</td>
       <td class="col-host" title="${escapeHtml(entry.host)}">${escapeHtml(entry.host)}</td>
-      <td class="col-path" title="${escapeHtml(entry.path)}">${escapeHtml(truncateText(entry.path, 60))}</td>
+      <td class="col-path" title="${escapeHtml(pathText)}">${escapeHtml(truncateText(pathText, 60))}</td>
       <td class="col-size">${bodySize}</td>
       <td class="col-type">${escapeHtml(entry.contentType)}</td>
       <td class="col-duration">${this.harParser.formatTime(entry.time)}</td>

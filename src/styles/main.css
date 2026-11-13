@@ -762,6 +762,11 @@ body.resizing-vertical * {
 #requests-table tbody tr.hl-yellow { background-color: color-mix(in srgb, yellow 35%, white); }
 #requests-table tbody tr.hl-yellowgreen { background-color: color-mix(in srgb, yellowgreen 35%, white); }
 
+#requests-table tbody tr.invalid-entry {
+  color: var(--error-color);
+  font-style: italic;
+}
+
 #requests-table tbody tr:hover {
   background-color: rgba(52, 152, 219, 0.08);
 }

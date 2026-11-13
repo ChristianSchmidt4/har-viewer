@@ -167,6 +167,16 @@ export interface ParsedEntry {
   host: string;
   path: string;
   contentType: string;
+  // Set when the raw log.entries item could not be parsed (see InvalidItem).
+  invalid?: { reason: string; raw: string };
+}
+
+// Placeholder kept in place of a log.entries item that is not a valid JSON
+// object, so the rest of the archive still loads. `raw` is a short excerpt.
+export interface InvalidItem {
+  invalid: true;
+  reason: string;
+  raw: string;
 }
 
 export interface ParsedHar {

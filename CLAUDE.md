@@ -29,8 +29,9 @@ do not trigger it.
 
 This is a client-side HTTP Archive (HAR) viewer inspired by Fiddler. A user
 drags a `.har` file onto the landing screen (or picks one via a file
-dialog); the file is read and parsed entirely in the browser with
-`FileReader`/`JSON.parse` — **it is never uploaded to a server**. The dev
+dialog); the file is read and parsed entirely in the browser (chunked reads;
+each `log.entries` item is `JSON.parse`d separately, so the whole file is never
+one JS string, which V8 cannot hold for multi-GB HARs) — **it is never uploaded to a server**. The dev
 server and production build only ever serve static files.
 
 The app is written in **TypeScript** (strict mode) and served as native ES
@@ -83,9 +84,13 @@ is needed for development. See [TypeScript](#typescript) below.
 8. **virtualWindow** (`virtualWindow.ts`) - `computeWindowRange(scrollTop,
    viewportHeight, rowHeight, total, overscan)` returns the `[start, end)`
    row slice to render for a fixed-row-height list (used by `RequestTable`).
-9. **fileLoader** (`fileLoader.ts`) - `readFileAsText(file, onProgress)` and
-   `readGzipFileAsText(file, onProgress)` read a local file with progress
-   reported in [0, 1] (`.gz` progress is on compressed bytes), plus
+9. **fileLoader** (`fileLoader.ts`) - `parseJsonFileStreaming(file, isGzipped, onProgress, options?)`
+   reads a local file in chunks (`file.stream()`, optional `DecompressionStream`,
+   `TextDecoderStream`) and passes them to `jsonArraySplitter.parseJsonWithArray`
+   (`['log','entries']`, `options` = `{ batchSize, onBatch }`). Progress
+   is reported in [0, 1] on compressed bytes, and it returns the
+   uncompressed size for `.gz`. Also `readFileAsText(file, onProgress)` and
+   `readGzipFileAsText(file, onProgress)` (FileReader / text-based helpers), plus
    `nextPaint()`, which yields so progress UI can repaint before a
    synchronous step.
 
@@ -185,8 +190,9 @@ is needed for development. See [TypeScript](#typescript) below.
      response bytes by content-type.
 
 ### Orchestration
-- **Main Application** (`src/index.ts`) - Reads the file locally, calls
-  `HarParser.parse`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`
+- **Main Application** (`src/index.ts`) - Reads the file locally in batches
+  (`BATCH_SIZE`, via `parseJsonFileStreaming` with `onBatch`), parses each batch
+  with `HarParser.parseEntries`, and wires `FileDropZone` → `RequestTable` → `DetailPanel`
   (`onSelect` → `detailPanel.render`, `onMultiSelect` →
   `detailPanel.renderMultiSelect`/`showEmptyState` when the selection is
   cleared). Also implements the header's **Export** button (`exportData`),
@@ -198,8 +204,8 @@ is needed for development. See [TypeScript](#typescript) below.
   (next to `#file-info`, before the header buttons) with the first
   request's start time and the archive's total duration (first request's
   start to last request's end), via `HarParser.formatDateTime`/`formatTime`.
-  `.har.gz`/`.gz` files are gunzipped in the browser with
-  `DecompressionStream` (`readGzipFileAsText`), and the header then shows the
+  `.har.gz`/`.gz` files are gunzipped in the browser while reading
+  (`parseJsonFileStreaming`, which uses `DecompressionStream`), and the header then shows the
   uncompressed size. The custom-column input (`#custom-col-input`) adds a
   column on Enter when its expression is a valid `reqheader:`/`resheader:`/
   `reqcookie:`/`rescookie:` expression; the label is derived from it, and the
@@ -235,14 +241,19 @@ Follow these patterns when adding new features:
 ### Data Flow
 1. User drags a file onto `FileDropZone` or picks one via "Select File…"
    (`.har`, `.har.gz`/`.gz` or JSON)
-2. `index.ts` reads the file locally via `utils/fileLoader.ts` (gunzipping first for
-   `.gz`) and parses the JSON. Loading shows a progress bar
-   (`#load-progress`, in the drop panel) with a determinate read phase
-   (`FileReader` progress; compressed bytes for `.gz`) and indeterminate
-   "Parsing…"/"Building request table…" phases, separated by `nextPaint()`
-   yields so the bar repaints. `JSON.parse` itself is synchronous and still
-   blocks the main thread for the duration of the parse
-3. `HarParser.parse` turns the raw HAR JSON into structured entries
+2. `index.ts` reads and parses the file locally via `utils/fileLoader.ts`
+   (`parseJsonFileStreaming`, gunzipping first for `.gz`). The `log.entries`
+   items are parsed with native `JSON.parse` one at a time via
+   `utils/jsonArraySplitter.ts` (a token-level parser such as stream-json was
+   ~50x slower) and delivered in batches of 1000 (`BATCH_SIZE`). Items that fail
+   to parse become `{ invalid: true, reason, raw }` placeholders, which the
+   table renders as invalid rows. The first batch hides the drop zone and calls
+   `RequestTable.setEntries`; later batches call `appendEntries`. Progress
+   (`#load-progress`, in the drop panel) is shown while the file is read, then
+   the file info shows the loaded count. `nextPaint()` yields between batches.
+3. `HarParser.parseEntries` turns each raw batch into structured entries
+   (`id` = index in `log.entries`, offset per batch); `earliestStart` /
+   `assignRelativeTimings` keep relative times consistent across batches
 4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
    starts in its empty state
 5. Selecting a single row calls `DetailPanel.render(entry)`, which renders
@@ -393,6 +404,8 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
 - `tests/highlightRules.test.ts` - highlight rule parsing and CSS color coverage
 - `tests/virtualWindow.test.ts` - windowed-rendering range computation
+- `tests/fileLoaderStream.test.ts` - streaming JSON parse (plain/gzip), equivalence with `JSON.parse`, progress (Node env)
+- `tests/jsonArraySplitter.test.ts` - per-item array splitting across chunk sizes, escapes, batching, invalid-item placeholders, error cases (Node env)
 - `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
 - `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
 

@@ -127,4 +127,29 @@ describe('HarParser', () => {
       expect(parser.formatDurationClock(37)).toBe('00:00:00.037');
     });
   });
+
+  describe('parseEntries with invalid items and batches', () => {
+    it('keeps invalid items as flagged entries and honours the id offset', () => {
+      const entries = parser.parseEntries(
+        [
+          { startedDateTime: '2024-01-01T00:00:01.000Z', time: 5, request: { url: 'https://a.test/x', method: 'GET' }, response: { status: 200 } },
+          { invalid: true, reason: 'Unexpected token', raw: '{"b":oops}' },
+        ] as any,
+        1000,
+      );
+      expect(entries[0]!.id).toBe(1000);
+      expect(entries[1]!.id).toBe(1001);
+      expect(entries[1]!.invalid).toEqual({ reason: 'Unexpected token', raw: '{"b":oops}' });
+      expect(entries[0]!.invalid).toBeUndefined();
+    });
+
+    it('computes relative start times from the earliest start', () => {
+      const entries = parser.parseEntries([
+        { startedDateTime: '2024-01-01T00:00:02.000Z' },
+        { startedDateTime: '2024-01-01T00:00:01.000Z' },
+      ] as any);
+      parser.applyRelativeTimings(entries);
+      expect(entries.map(e => e.relativeStartMs)).toEqual([1000, 0]);
+    });
+  });
 });

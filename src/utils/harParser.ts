@@ -2,6 +2,7 @@
 import type {
   HarData,
   HarEntryRaw,
+  InvalidItem,
   HarRequestRaw,
   HarResponseRaw,
   HarContentRaw,
@@ -13,6 +14,7 @@ import type {
   ParsedTimings,
   ParsedHar
 } from '@/types/har';
+import { isInvalidItem } from './jsonArraySplitter.js';
 
 export class HarParser {
   parse(harData: HarData): ParsedHar {
@@ -34,14 +36,16 @@ export class HarParser {
     };
   }
 
-  parseEntries(entries: HarEntryRaw[]): ParsedEntry[] {
-    return entries.map((entry, index) => {
+  parseEntries(entries: Array<HarEntryRaw | InvalidItem>, idOffset = 0): ParsedEntry[] {
+    return entries.map((item, index) => {
+      const invalid = isInvalidItem(item) ? item : null;
+      const entry: HarEntryRaw = invalid ? ({} as HarEntryRaw) : (item as HarEntryRaw);
       const request = this.parseRequest(entry.request || {});
       const response = this.parseResponse(entry.response || {});
       const urlParts = this.parseUrl(request.url);
 
       return {
-        id: index,
+        id: idOffset + index,
         startedDateTime: entry.startedDateTime || '',
         startedTimeMs: this.toTimestamp(entry.startedDateTime),
         relativeStartMs: 0, // filled in by applyRelativeTimings
@@ -57,7 +61,8 @@ export class HarParser {
         protocol: response.httpVersion || request.httpVersion || '',
         host: urlParts.host,
         path: urlParts.path,
-        contentType: this.getContentType(response.content.mimeType, this.hasResponseBody(response))
+        contentType: this.getContentType(response.content.mimeType, this.hasResponseBody(response)),
+        ...(invalid ? { invalid: { reason: invalid.reason, raw: invalid.raw } } : {})
       };
     });
   }
@@ -65,13 +70,22 @@ export class HarParser {
   // Computes relativeStartMs on every entry relative to the earliest entry
   // in the archive (i.e. "time since the first request started").
   applyRelativeTimings(entries: ParsedEntry[]): void {
-    if (!entries.length) return;
-    const validTimes = entries
-      .map(e => e.startedTimeMs)
-      .filter(t => Number.isFinite(t));
-    if (!validTimes.length) return;
+    const firstStart = this.earliestStart(entries);
+    if (firstStart !== null) this.assignRelativeTimings(entries, firstStart);
+  }
 
-    const firstStart = Math.min(...validTimes);
+  // Earliest valid start time among the entries, or null when none has one.
+  earliestStart(entries: ParsedEntry[]): number | null {
+    let earliest: number | null = null;
+    for (const entry of entries) {
+      if (Number.isFinite(entry.startedTimeMs) && (earliest === null || entry.startedTimeMs < earliest)) {
+        earliest = entry.startedTimeMs;
+      }
+    }
+    return earliest;
+  }
+
+  assignRelativeTimings(entries: ParsedEntry[], firstStart: number): void {
     entries.forEach(entry => {
       entry.relativeStartMs = Number.isFinite(entry.startedTimeMs)
         ? entry.startedTimeMs - firstStart
