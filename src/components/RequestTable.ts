@@ -6,7 +6,7 @@
 // Custom columns can be added via setCustomColumns() — they render as
 // additional <th>/<td> pairs after the built-in columns.
 import { HarParser } from '@/utils/harParser';
-import { filterEntries } from '@/utils/filterParser';
+import type { HarStore } from '@/utils/harStore';
 import { escapeHtml, truncateText } from '@/utils/domUtils';
 import { evaluateCustomColumn } from '@/utils/customColumns';
 import { computeHighlightClasses, highlightClassName, HIGHLIGHT_EMOJIS } from '@/utils/highlightRules';
@@ -58,8 +58,20 @@ export class RequestTable {
   private readonly scrollEl: HTMLElement;
 
   private harParser: HarParser;
-  private allEntries: ParsedEntry[];
-  private visibleEntries: ParsedEntry[];
+  // Entries live in the store; only their indices are kept here.
+  private store: HarStore | null;
+  // Indices passing the applied filter, ascending.
+  private visibleIds: number[];
+  // Filter query the visibleIds were computed for, and the number of store
+  // rows already filtered against it.
+  private appliedQuery: string;
+  private indexedCount: number;
+  // Bumped when the store is replaced so stale async work is discarded.
+  private generation: number;
+  // Filter and render work is serialized so results cannot interleave.
+  private syncChain: Promise<void>;
+  private renderToken: number;
+  private selectionToken: number;
   private selectedEntryIds: Set<number>;
   private lastSelectedEntryId: number | null;
 
@@ -86,8 +98,14 @@ export class RequestTable {
     this.onCustomColumnRemove = onCustomColumnRemove;
     this.harParser = new HarParser();
 
-    this.allEntries = [];
-    this.visibleEntries = [];
+    this.store = null;
+    this.visibleIds = [];
+    this.appliedQuery = '';
+    this.indexedCount = 0;
+    this.generation = 0;
+    this.syncChain = Promise.resolve();
+    this.renderToken = 0;
+    this.selectionToken = 0;
     this.selectedEntryIds = new Set();
     this.lastSelectedEntryId = null;
     this.customColumns = [];
@@ -108,13 +126,13 @@ export class RequestTable {
   }
 
   private bindEvents(): void {
-    this.scrollEl.addEventListener('scroll', () => this.renderWindow());
+    this.scrollEl.addEventListener('scroll', () => void this.renderWindow());
     // A resized pane changes how many rows fit in the viewport.
-    new ResizeObserver(() => this.renderWindow()).observe(this.scrollEl);
+    new ResizeObserver(() => void this.renderWindow()).observe(this.scrollEl);
 
     this.filterInputEl.addEventListener('input', () => {
       clearTimeout(this.filterDebounceTimer);
-      this.filterDebounceTimer = setTimeout(() => this.applyFilter(), 250);
+      this.filterDebounceTimer = setTimeout(() => this.refresh(), 250);
     });
 
     // Toggle the filter syntax hint on focus for discoverability.
@@ -177,20 +195,28 @@ export class RequestTable {
     });
   }
 
-  setEntries(entries: ParsedEntry[]): void {
-    this.allEntries = entries;
+  // Shows the rows of a store (or nothing). Clears the selection and filter.
+  setStore(store: HarStore | null): void {
+    this.generation++;
+    this.renderToken++;
+    this.selectionToken++;
+    this.store = store;
+    this.visibleIds = [];
+    this.appliedQuery = '';
+    this.indexedCount = 0;
     this.selectedEntryIds.clear();
     this.lastSelectedEntryId = null;
     this.filterInputEl.value = '';
     this.scrollEl.scrollTop = 0;
-    this.applyFilter();
+    this.refresh();
   }
 
-  // Adds a further batch of entries (progressive loading) without touching
-  // the selection or scroll position.
-  appendEntries(entries: ParsedEntry[]): void {
-    for (const entry of entries) this.allEntries.push(entry);
-    this.applyFilter();
+  // Filters any rows added to the store since the last run (progressive
+  // loading) and re-renders. Call again after the store grows.
+  refresh(): void {
+    this.syncChain = this.syncChain
+      .then(() => this.syncFilter())
+      .catch(error => console.error('Filtering failed', error));
   }
 
   setCustomColumns(columns: CustomColumn[]): void {
@@ -212,7 +238,7 @@ export class RequestTable {
   // Selects only the given entry (as a click would), scrolling it into view
   // when it is part of the currently filtered list.
   selectSingleEntry(entryId: number): void {
-    const index = this.visibleEntries.findIndex(e => e.id === entryId);
+    const index = this.visibleIds.indexOf(entryId);
     if (index !== -1) {
       const rowTop = index * this.rowHeight;
       const viewBottom = this.scrollEl.scrollTop + this.scrollEl.clientHeight;
@@ -223,15 +249,30 @@ export class RequestTable {
     this.selectEntry(entryId);
   }
 
-  // Returns the entries currently passing the filter (same objects as
-  // allEntries, so entry.id maps back to the original HAR entry index).
-  getVisibleEntries(): ParsedEntry[] {
-    return this.visibleEntries;
+  // Indices (HAR entry ids) of the entries currently passing the filter.
+  getVisibleIds(): number[] {
+    return this.visibleIds;
   }
 
-  applyFilter(): void {
+  private async syncFilter(): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    const generation = this.generation;
+
     const query = this.filterInputEl.value;
-    this.visibleEntries = filterEntries(this.allEntries, query);
+    if (query !== this.appliedQuery) {
+      this.appliedQuery = query;
+      this.visibleIds = [];
+      this.indexedCount = 0;
+    }
+
+    const target = store.count;
+    if (target > this.indexedCount) {
+      const ids = await store.filterIds(query, this.indexedCount, target);
+      if (generation !== this.generation) return;
+      for (const id of ids) this.visibleIds.push(id);
+      this.indexedCount = target;
+    }
     this.render();
   }
 
@@ -262,13 +303,14 @@ export class RequestTable {
     // Content changed, so the rendered slice must be rebuilt even if the
     // visible index range is unchanged.
     this.renderedRange = null;
-    this.renderWindow();
+    void this.renderWindow();
   }
 
   // Renders only the rows in the viewport (plus overscan), padded above and
   // below with spacer rows that keep the scrollbar at the full list height.
-  private renderWindow(): void {
-    const total = this.visibleEntries.length;
+  // Row data is read from the store for just the rows being rendered.
+  private async renderWindow(): Promise<void> {
+    const total = this.visibleIds.length;
     const range = computeWindowRange(
       this.scrollEl.scrollTop,
       this.scrollEl.clientHeight,
@@ -283,13 +325,28 @@ export class RequestTable {
     }
     this.renderedRange = range;
 
+    const token = ++this.renderToken;
+    const store = this.store;
+    const ids = this.visibleIds.slice(range.start, range.end);
+    let entries: ParsedEntry[] = [];
+    if (store && ids.length > 0) {
+      try {
+        entries = await store.getEntries(ids);
+      } catch (error) {
+        if (token === this.renderToken) console.error('Failed to read rows', error);
+        return;
+      }
+    }
+    // A newer render or a store change superseded this one.
+    if (token !== this.renderToken) return;
+
     const colSpan = COLUMNS.length + this.customColumns.length + 1;
     const nodes: HTMLElement[] = [];
     if (range.start > 0) {
       nodes.push(this.buildSpacer(range.start * this.rowHeight, colSpan));
     }
-    for (let i = range.start; i < range.end; i++) {
-      nodes.push(this.buildRow(this.visibleEntries[i]!));
+    for (const entry of entries) {
+      nodes.push(this.buildRow(entry));
     }
     const bottomRows = total - range.end;
     if (bottomRows > 0) {
@@ -304,8 +361,7 @@ export class RequestTable {
       const measured = firstRow.getBoundingClientRect().height;
       if (measured > 0 && Math.abs(measured - this.rowHeight) > 0.5) {
         this.rowHeight = measured;
-        this.renderedRange = null;
-        this.renderWindow();
+        this.render();
       }
     }
   }
@@ -396,15 +452,15 @@ export class RequestTable {
 
   private selectRange(entryId: number): void {
     const anchorId = this.lastSelectedEntryId ?? entryId;
-    const anchorIndex = this.visibleEntries.findIndex(e => e.id === anchorId);
-    const targetIndex = this.visibleEntries.findIndex(e => e.id === entryId);
+    const anchorIndex = this.visibleIds.indexOf(anchorId);
+    const targetIndex = this.visibleIds.indexOf(entryId);
     if (anchorIndex === -1 || targetIndex === -1) {
       this.selectEntry(entryId);
       return;
     }
 
     const [start, end] = anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-    this.selectedEntryIds = new Set(this.visibleEntries.slice(start, end + 1).map(e => e.id));
+    this.selectedEntryIds = new Set(this.visibleIds.slice(start, end + 1));
     this.syncRowSelectionClasses();
     this.notifySelection();
   }
@@ -415,8 +471,20 @@ export class RequestTable {
     });
   }
 
-  private notifySelection(): void {
-    const selected = this.allEntries.filter(e => this.selectedEntryIds.has(e.id));
+  private async notifySelection(): Promise<void> {
+    const token = ++this.selectionToken;
+    const ids = [...this.selectedEntryIds].sort((a, b) => a - b);
+    let selected: ParsedEntry[] = [];
+    if (this.store && ids.length > 0) {
+      try {
+        selected = await this.store.getEntries(ids);
+      } catch (error) {
+        console.error('Failed to read selected rows', error);
+        return;
+      }
+    }
+    if (token !== this.selectionToken) return;
+
     if (selected.length === 0) {
       this.onMultiSelect([]);
     } else if (selected.length === 1) {
@@ -427,8 +495,8 @@ export class RequestTable {
   }
 
   private updateResultCount(): void {
-    const total = this.allEntries.length;
-    const visible = this.visibleEntries.length;
+    const total = this.store?.count ?? 0;
+    const visible = this.visibleIds.length;
     this.resultCountEl.textContent = visible === total
       ? `${total} requests`
       : `${visible} / ${total} requests`;

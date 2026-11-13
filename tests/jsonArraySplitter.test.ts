@@ -67,6 +67,15 @@ describe('parseJsonWithArray', () => {
     expect(batches.flat()).toEqual(entries);
   });
 
+  it('does not retain items when onBatch is given', async () => {
+    const json = JSON.stringify({ log: { entries: [{ i: 1 }, { i: 2 }, { i: 3 }] } });
+    const result = await parseJsonWithArray(readerFor(json, 5), ['log', 'entries'], {
+      batchSize: 2,
+      onBatch: () => undefined,
+    }) as { log: { entries?: unknown[] } };
+    expect(result.log.entries).toEqual([]);
+  });
+
   it('turns an item with malformed JSON into an invalid placeholder and keeps going', async () => {
     const json = '{"log":{"entries":[{"a":1},{"b":oops},{"c":3}]}}';
     const result = (await parseJsonWithArray(readerFor(json, 4), ['log', 'entries'])) as any;

@@ -12,6 +12,7 @@ export interface ArraySplitOptions {
   // Number of items per onBatch call (default 1000).
   batchSize?: number;
   // Awaited before reading continues, so callers can render or yield.
+  // Items passed here are released by the splitter once the callback returns.
   onBatch?: (items: unknown[]) => void | Promise<void>;
 }
 
@@ -68,8 +69,10 @@ export async function parseJsonWithArray(
   const batchSize = options.batchSize ?? 1000;
   const stack: Frame[] = [];
   const skeleton: string[] = [];
+  // Parsed items are kept only when no onBatch callback is given.
   const items: unknown[] = [];
-  let emitted = 0;
+  // With onBatch, items wait here until they are handed out in batches.
+  const pending: unknown[] = [];
   let itemParts: string[] = [];
   let itemDepth = 0;
   let itemIsPrimitive = false;
@@ -101,20 +104,19 @@ export async function parseJsonWithArray(
     flush(i);
     dest = next;
   };
+  const collect = (value: unknown): void => {
+    if (options.onBatch) pending.push(value);
+    else items.push(value);
+  };
   const finishItem = (): void => {
-    items.push(parseItem(itemParts.join('')));
+    collect(parseItem(itemParts.join('')));
     itemParts = [];
     inItem = false;
   };
   const emitBatches = async (final: boolean): Promise<void> => {
     if (!options.onBatch) return;
-    while (items.length - emitted >= batchSize) {
-      await options.onBatch(items.slice(emitted, emitted + batchSize));
-      emitted += batchSize;
-    }
-    if (final && items.length > emitted) {
-      await options.onBatch(items.slice(emitted));
-      emitted = items.length;
+    while (pending.length >= batchSize || (final && pending.length > 0)) {
+      await options.onBatch(pending.splice(0, batchSize));
     }
   };
 

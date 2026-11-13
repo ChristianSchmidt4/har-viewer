@@ -9,23 +9,19 @@
 </head>
 <body>
     <div id="app">
-        <!-- Landing screen: shown until a HAR file is loaded. Drag & drop
-             or the Browse button both read the file locally; nothing is
-             ever sent to a server. -->
+        <!-- Landing screen: shown until a database is opened. Dropping or
+             selecting a HAR file imports it into a new database in the
+             background; existing databases can be opened or deleted here.
+             Nothing is ever sent to a server. -->
         <div id="drop-screen">
+            <section id="db-list" class="db-list-section" aria-label="Stored databases"></section>
             <div id="drop-panel">
                 <div class="drop-icon">⇩</div>
-                <h1>HAR Viewer</h1>
-                <p class="drop-subtitle">Drop a .har or .har.gz file here</p>
+                <h1>HAR Upload</h1>
+                <p class="drop-subtitle">Drop a .har or .har.gz file here to import it</p>
                 <p class="drop-or">or</p>
                 <button id="browse-btn" type="button">Select File…</button>
                 <input type="file" id="har-file-input" accept=".har,.har.gz,.gz,application/json,application/gzip" hidden />
-                <div id="load-progress" class="load-progress hidden" role="progressbar" aria-live="polite">
-                    <div id="load-progress-label" class="load-progress-label"></div>
-                    <div class="load-progress-track">
-                        <div id="load-progress-bar" class="load-progress-bar"></div>
-                    </div>
-                </div>
                 <p class="drop-privacy-note">Processed entirely in your browser — files are never uploaded.</p>
             </div>
         </div>

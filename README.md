@@ -5,8 +5,20 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 ## Features
 
 - Client-side HAR file parsing — **nothing is ever uploaded to a server**
-- Drag-and-drop landing screen, with a "Select File…" button as an
-  alternative to dropping a file
+- Start page as a database manager: every imported HAR file is stored as its
+  own IndexedDB database. The stored-database list sits above the **HAR Upload**
+  panel (drag-and-drop or "Select File…")
+- Import runs in the background, with a progress bar and request count per
+  database; a notification reports file sizes and the request count when done
+- Only complete databases can be opened; incomplete ones are flagged and can be deleted
+- Each database shows its file time (human-readable) and an editable comment;
+  the comment is taken from the HAR's `log.comment` when present
+- Databases can be deleted (with confirmation) and reordered by dragging the
+  `⋮⋮` handle on the right of a row; the order is kept in the browser
+- Importing a file that is already stored asks whether to reuse the stored copy
+  or override it; a name prompt lets you choose the database name on upload
+- Requests are stored in IndexedDB, so large archives do not have to fit in memory;
+  filtering runs against the database, and only the visible rows are read
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
 - Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
@@ -25,11 +37,14 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Multi-select (Ctrl/Cmd- or Shift-click) shows an aggregate view with a
   **Timeline** waterfall and a **Stats** summary
 - Header shows the archive's start time and total duration
-- Opens plain `.har` and gzip-compressed `.har.gz` files, with a progress bar while large files load
-- Export of the currently filtered requests as a `.har` file
+- Opens plain `.har` and gzip-compressed `.har.gz` files
+- Export of the currently filtered requests as a `.har` file, named after the
+  database and carrying its comment
 - Resizable panes (drag the splitters) and resizable request-table columns
   (drag the `Path` or custom column header edge)
 - Large archives stay fast: only the visible rows of the request table are rendered
+- Browser storage limits apply: Chromium and Safari allow about 60% of free disk
+  space for IndexedDB, Firefox about 10% of disk (capped at 10 GiB)
 - Clicking a row in the multi-select Timeline selects that request and shows its details
 - App version shown in the bottom-right corner
 - Responsive design (panels stack on narrow screens)
@@ -41,13 +56,18 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 har_viewer/
 ├── src/
 │   ├── components/
-│   │   ├── FileDropZone.ts   # Drag & drop / file-picker landing screen
+│   │   ├── DatabaseList.ts   # Stored-database list on the start page (open, comment, delete, reorder)
+│   │   ├── ChoiceDialog.ts   # Centered choice and text input dialogs
+│   │   ├── FileDropZone.ts   # "HAR Upload" drag & drop / file-picker panel
 │   │   ├── RequestTable.ts   # Filterable, windowed request list (left pane)
 │   │   ├── HighlightBar.ts   # Highlight rule input + custom columns below the list
 │   │   └── DetailPanel.ts    # Request/Response detail view and multi-select aggregate view (right pane)
 │   ├── types/
 │   │   └── har.ts            # Shared HAR raw/parsed type definitions
 │   ├── utils/
+│   │   ├── harStore.ts       # Per-file IndexedDB store (import, filter IDs, export)
+│   │   ├── dbOrder.ts        # Start-page order of stored databases
+│   │   ├── jsonArraySplitter.ts # Per-item parsing of the log.entries array
 │   │   ├── harParser.ts      # HAR JSON -> structured entries
 │   │   ├── filterParser.ts   # Request-table filter query engine
 │   │   ├── highlightRules.ts # Highlight rule parsing, color/emoji classes

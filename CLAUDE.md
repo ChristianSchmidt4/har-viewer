@@ -72,6 +72,10 @@ is needed for development. See [TypeScript](#typescript) below.
    into headers/body), start/end timestamps, sequence vs. aggregate session
    duration, response code tally, and response bytes by content-type - the
    data behind the multi-select detail panel's Stats tab.
+5b. **dbOrder** (`dbOrder.ts`) - Start-page order of the stored databases.
+   The order is a list of DB names in localStorage (`har-viewer-db-order`);
+   `applyDbOrder` sorts by it (unknown/new names go last), and `moveName`
+   computes the new order for a drag-and-drop move.
 6. **customColumns** (`customColumns.ts`) - Persistence and evaluation for
    request-table custom columns: `loadCustomColumns`/`saveCustomColumns`
    (localStorage key `har-viewer-custom-columns`), `addCustomColumn`,
@@ -103,10 +107,28 @@ is needed for development. See [TypeScript](#typescript) below.
   an entry flowing through the table/filter/detail panel.
 
 ### Components (`src/components/`)
-1. **FileDropZone** (`FileDropZone.ts`) - The landing screen: drag-and-drop
-   target plus a "Select File…" button (native file picker). Validates the
-   file looks like a `.har`/JSON file, then hands the raw `File` object back
-   via `onFileSelected`.
+1. **FileDropZone** (`FileDropZone.ts`) - The import target ("HAR Upload"
+   panel, below the stored-database list on the landing screen): drag-and-drop plus a "Select File…" button (native file picker).
+   Validates the file looks like a `.har`/JSON file, then hands the raw `File`
+   object back via `onFileSelected` (wired to `index.ts` `importFile`). It only
+   imports; it never opens a file for viewing.
+1b. **DatabaseList** (`DatabaseList.ts`) - The landing screen's list of stored
+   databases (`HarStore.list()`). Each row is a CSS grid: status badge
+   (Complete / Incomplete / Importing, colored) | name + file time
+   (human-readable `formatDateTime`) + details or progress bar | comment |
+   icon-only buttons (Open, Delete) | drag grip. Open is enabled only for
+   complete databases; Delete is disabled while importing. The edit-comment
+   icon sits next to the comment and is visible only on hover/focus
+   (`.db-comment-cell`); it calls `onEditComment`, which `index.ts` routes to
+   `editComment` (opens `askText`). Icon buttons carry `title` and `aria-label`.
+   `index.ts` `renderDatabaseList` fills the list; `onOpen`/`onDelete` route to
+   `showDatabase`/`deleteDatabase` (delete asks via `ChoiceDialog`).
+   `.db-list` scrolls only when it exceeds `min(60vh, 460px)`.
+   Reordering uses a grip handle (`.db-drag-handle`, right edge of the row)
+   as the only drag source, so text in a row stays selectable. Dropping on
+   another row shows a before/after
+   indicator and calls `onReorder(names)`, which `index.ts` saves via
+   `dbOrder.ts` and re-renders.
 2. **RequestTable** (`RequestTable.ts`) - Left-pane filterable table. Owns
    the filter input, debounces keystrokes 250ms before re-filtering via
    `filterParser`, and renders rows with columns: index, response code,
@@ -121,10 +143,13 @@ is needed for development. See [TypeScript](#typescript) below.
    (`onSelect(entry)`), Ctrl/Cmd-click toggles a row in/out of the selection,
    and Shift-click selects the range from the last-touched row; 0 or 1
    selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
-   `onMultiSelect(entries)`. Exposes `getVisibleEntries()` so other
-   components (e.g. the Export button in `index.ts`) can get the currently
-   filtered-in entries, and `selectSingleEntry(id)` so the detail panel's
-   timeline can select one row programmatically.
+   `onMultiSelect(entries)`. Rows live in the IndexedDB store (`HarStore`):
+   the table keeps only the list of matching indices (`visibleIds`), filters
+   incrementally via `HarStore.filterIds`, and reads the rows it displays with
+   `HarStore.getEntries`. `setStore(store)` attaches a file, `refresh()`
+   re-filters, `getVisibleIds()` gives the current filter result (used by
+   export), and `selectSingleEntry(id)` lets the detail panel's timeline
+   select one row programmatically.
    **Windowed rendering**: only the rows inside the `.request-table-scroll`
    viewport (plus `OVERSCAN_ROWS` above/below) are in the DOM; the rest is
    represented by `tr.spacer` rows whose heights keep the scrollbar at full
@@ -189,6 +214,21 @@ is needed for development. See [TypeScript](#typescript) below.
      sequence duration, aggregate session duration); response code tally;
      response bytes by content-type.
 
+10. **HarStore** (`harStore.ts`) - Per-file IndexedDB store of raw HAR entries
+   (`rows` keyed by array index, `meta` for file name/size, file modification
+   time, comment, completion, count and root). `dbNameFor(name, lastModified)`, `HarStore.list()` (all stored
+   DBs, complete or not), `HarStore.inspect` (complete only), `HarStore.open`
+   (used by the app only for complete DBs), `create(name, fileName, fileSize, fileModified)` (replaces
+   an existing DB of that name), `HarStore.updateComment(name, comment)` (for DBs not
+   being imported) and the instance `setComment(comment)` (for running imports, so
+   batch writes keep the comment), `deleteDatabase`, `writeBatch` (rows and count
+   in one transaction), `finish`, `getEntries(ids)`, `filterIds(query, from, to)`
+   (uses `compileFilterQuery`), and `exportBlob(ids)`.
+11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
+   and `askText(message, defaultValue)` show a modal `<dialog>` and resolve to
+   the chosen value / entered text, or `null` on cancel. Both are centered on
+   screen (`.choice-dialog` in `main.css`).
+
 ### Orchestration
 - **Main Application** (`src/index.ts`) - Reads the file locally in batches
   (`BATCH_SIZE`, via `parseJsonFileStreaming` with `onBatch`), parses each batch
@@ -197,8 +237,11 @@ is needed for development. See [TypeScript](#typescript) below.
   `detailPanel.renderMultiSelect`/`showEmptyState` when the selection is
   cleared). Also implements the header's **Export** button (`exportData`),
   which downloads the entries currently passing the request table's filter
-  (via `RequestTable.getVisibleEntries`) as a standalone `.har` (JSON) file,
-  named `<original-name>.filtered.har`. The button's `title` tooltip states
+  (via `RequestTable.getVisibleIds`, streamed out of `HarStore.exportBlob`)
+  as a standalone `.har` (JSON) file, named `<database name>.filtered.har`
+  (the name entered at import, not the original file name). The export also
+  carries the stored comment as `log.comment`.
+  Export is only offered for complete databases (the button shows a toast otherwise). The button's `title` tooltip states
   what/format is exported; keep it in sync if the export format or scope
   changes. After a file loads, `displayTimeRange` fills `#time-range`
   (next to `#file-info`, before the header buttons) with the first
@@ -239,23 +282,34 @@ Follow these patterns when adding new features:
 ## Architecture Notes
 
 ### Data Flow
-1. User drags a file onto `FileDropZone` or picks one via "Select File…"
-   (`.har`, `.har.gz`/`.gz` or JSON)
+1. On the landing screen, the user imports by dragging a file onto
+   `FileDropZone` or picking one via "Select File…" (`.har`, `.har.gz`/`.gz` or
+   JSON), or opens/deletes an existing DB from `DatabaseList`. Opening a DB
+   shows the table; the rest of the app only performs DB operations.
 2. `index.ts` reads and parses the file locally via `utils/fileLoader.ts`
    (`parseJsonFileStreaming`, gunzipping first for `.gz`). The `log.entries`
    items are parsed with native `JSON.parse` one at a time via
    `utils/jsonArraySplitter.ts` (a token-level parser such as stream-json was
    ~50x slower) and delivered in batches of 1000 (`BATCH_SIZE`). Items that fail
    to parse become `{ invalid: true, reason, raw }` placeholders, which the
-   table renders as invalid rows. The first batch hides the drop zone and calls
-   `RequestTable.setEntries`; later batches call `appendEntries`. Progress
-   (`#load-progress`, in the drop panel) is shown while the file is read, then
-   the file info shows the loaded count. `nextPaint()` yields between batches.
-3. `HarParser.parseEntries` turns each raw batch into structured entries
-   (`id` = index in `log.entries`, offset per batch); `earliestStart` /
-   `assignRelativeTimings` keep relative times consistent across batches
-4. `RequestTable.setEntries` renders the filterable list; `DetailPanel`
-   starts in its empty state
+   table renders as invalid rows. Import runs as a background job
+   (`index.ts` `importFile`/`runImport`): each batch is written to the file's
+   IndexedDB store (`HarStore.writeBatch`, one DB per file name + lastModified,
+   keyed by array index). The import does not open a table: the user stays on
+   the start page, where the DB list shows the import percentage and request
+   count. The header (`updateFileInfo`) only describes complete DBs. If a complete stored copy already
+   exists, the user is asked (`ChoiceDialog.askChoice`) to reuse it or override
+   it. Otherwise the user is asked for a database name (`ChoiceDialog.askText`,
+   prefilled with the file name). The chosen name is only the display name
+   (`fileName` in meta); duplicate detection still uses the original file name +
+   lastModified. On completion a toast (`showMessage(..., 'info')`) reports the file
+   sizes and request count. A failed import leaves an incomplete DB, which is
+   shown as such on the start page and cannot be opened. Only one
+   job per DB name runs at a time. `nextPaint()` yields between batches.
+3. Rows are parsed on demand: `HarStore.getEntries` runs `HarParser.parseEntries`
+   and `assignRelativeTimings` on the rows it reads (`id` = index in `log.entries`)
+4. `RequestTable.refresh` filters the store incrementally and renders the
+   visible window from it; `DetailPanel` starts in its empty state
 5. Selecting a single row calls `DetailPanel.render(entry)`, which renders
    both sides' active sub-tab (Headers/Raw/Cookies/Syntax, plus Image/Font
    on the response side when applicable); selecting 2+
@@ -264,10 +318,12 @@ Follow these patterns when adding new features:
    Timeline/Stats view instead
 
 ### State Management
-All state is kept in-memory in the browser. No external state management
-libraries are used, and no network requests are made — the project is a
-pure static site (`npm run build` → static `dist/`, servable by any static
-file server).
+All HAR entries live in IndexedDB (`utils/harStore.ts`, one database per file
+named `har:<name>:<lastModified>`); only index lists and view state are kept
+in memory. Filtering and export read from the database. Highlights are applied
+at render time. No external state management libraries are used, and no
+network requests are made — the project is a pure static site
+(`npm run build` → static `dist/`, servable by any static file server).
 
 ### Filter Query Syntax (`filterParser.ts`)
 Parsed by a tokenizer + recursive-descent parser into an AST
@@ -408,6 +464,8 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/jsonArraySplitter.test.ts` - per-item array splitting across chunk sizes, escapes, batching, invalid-item placeholders, error cases (Node env)
 - `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
 - `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
+- `tests/dbOrder.test.ts` - DB order persistence, `applyDbOrder`, `moveName`
+- `tests/harStore.test.ts` - IndexedDB store: naming, create/finish/inspect/reopen, list/comment, filtering by range, export incl. comment (Node env with `fake-indexeddb`)
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES
