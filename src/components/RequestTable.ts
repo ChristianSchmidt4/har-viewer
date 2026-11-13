@@ -50,6 +50,8 @@ export interface RequestTableOptions {
   onSelect: (entry: ParsedEntry) => void;
   onMultiSelect: (entries: ParsedEntry[]) => void;
   onCustomColumnRemove?: (columnId: string) => void;
+  // Called with the filter query after the user changes it (debounced).
+  onFilterChange?: (query: string) => void;
 }
 
 export class RequestTable {
@@ -91,11 +93,13 @@ export class RequestTable {
   private renderedRange: WindowRange | null;
 
   private readonly onCustomColumnRemove?: (columnId: string) => void;
+  private readonly onFilterChange?: (query: string) => void;
 
-  constructor({ onSelect, onMultiSelect, onCustomColumnRemove }: RequestTableOptions) {
+  constructor({ onSelect, onMultiSelect, onCustomColumnRemove, onFilterChange }: RequestTableOptions) {
     this.onSelect = onSelect;
     this.onMultiSelect = onMultiSelect;
     this.onCustomColumnRemove = onCustomColumnRemove;
+    this.onFilterChange = onFilterChange;
     this.harParser = new HarParser();
 
     this.store = null;
@@ -132,7 +136,10 @@ export class RequestTable {
 
     this.filterInputEl.addEventListener('input', () => {
       clearTimeout(this.filterDebounceTimer);
-      this.filterDebounceTimer = setTimeout(() => this.refresh(), 250);
+      this.filterDebounceTimer = setTimeout(() => {
+        this.onFilterChange?.(this.filterInputEl.value);
+        this.refresh();
+      }, 250);
     });
 
     // Toggle the filter syntax hint on focus for discoverability.
@@ -200,6 +207,7 @@ export class RequestTable {
     this.generation++;
     this.renderToken++;
     this.selectionToken++;
+    clearTimeout(this.filterDebounceTimer);
     this.store = store;
     this.visibleIds = [];
     this.appliedQuery = '';
@@ -227,6 +235,12 @@ export class RequestTable {
 
   getCustomColumns(): CustomColumn[] {
     return this.customColumns;
+  }
+
+  // Sets the filter query (e.g. restored from the database) and re-filters.
+  setFilter(query: string): void {
+    this.filterInputEl.value = query;
+    this.refresh();
   }
 
   // Replaces the highlight rules and re-renders so row classes are updated.

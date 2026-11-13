@@ -7,6 +7,7 @@ import { HarParser } from './harParser.js';
 import { compileFilterQuery } from './filterParser.js';
 import { isInvalidItem } from './jsonArraySplitter.js';
 import type { HarEntryRaw, InvalidItem, ParsedEntry } from '../types/har.js';
+import type { CustomColumn } from './customColumns.js';
 
 const DB_VERSION = 1;
 const DB_PREFIX = 'har:';
@@ -18,11 +19,27 @@ const EXPORT_CHUNK_SIZE = 500;
 
 export type StoredRow = HarEntryRaw | InvalidItem;
 
+// Request-table view state kept with the database and restored on open.
+export interface DbView {
+  // Filter query of the request table.
+  filter: string;
+  customColumns: CustomColumn[];
+  // Highlight rules as their text (re-parsed when the database is opened).
+  highlightRules: string[];
+}
+
+export function emptyDbView(): DbView {
+  return { filter: '', customColumns: [], highlightRules: [] };
+}
+
 interface HarMeta {
   fileName: string;
   fileSize: number;
   // File modification time (ms since epoch) the database was created from.
   fileModified: number;
+  // Time (ms since epoch) the database was imported or last opened. Null for
+  // databases stored before this was tracked.
+  lastUsedMs: number | null;
   // Free-text comment entered by the user.
   comment: string;
   uncompressedSize: number | null;
@@ -31,6 +48,8 @@ interface HarMeta {
   complete: boolean;
   // The HAR document with log.entries removed.
   root: Record<string, unknown>;
+  // Absent in databases stored before view state was kept here.
+  view?: DbView;
 }
 
 export interface DatabaseSummary {
@@ -38,6 +57,7 @@ export interface DatabaseSummary {
   fileName: string;
   fileSize: number;
   fileModified: number;
+  lastUsedMs: number | null;
   comment: string;
   uncompressedSize: number | null;
   count: number;
@@ -84,15 +104,17 @@ function openDatabase(name: string): Promise<IDBDatabase> {
 
 export class HarStore {
   readonly name: string;
-  readonly fileName: string;
+  fileName: string;
   readonly fileSize: number;
   readonly fileModified: number;
+  lastUsedMs: number | null;
   comment: string;
   uncompressedSize: number | null;
   // Rows with index < count are written and readable.
   count: number;
   firstStartMs: number | null;
   complete: boolean;
+  view: DbView;
 
   private root: Record<string, unknown>;
   private readonly db: IDBDatabase;
@@ -105,11 +127,13 @@ export class HarStore {
     this.fileName = meta.fileName;
     this.fileSize = meta.fileSize;
     this.fileModified = meta.fileModified;
+    this.lastUsedMs = meta.lastUsedMs ?? null;
     this.comment = meta.comment;
     this.uncompressedSize = meta.uncompressedSize;
     this.count = meta.count;
     this.firstStartMs = meta.firstStartMs;
     this.complete = meta.complete;
+    this.view = meta.view ?? emptyDbView();
     this.root = meta.root;
   }
 
@@ -134,6 +158,7 @@ export class HarStore {
         fileName: meta.fileName,
         fileSize: meta.fileSize,
         fileModified: meta.fileModified,
+        lastUsedMs: meta.lastUsedMs ?? null,
         comment: meta.comment,
         uncompressedSize: meta.uncompressedSize,
         count: meta.count,
@@ -164,12 +189,15 @@ export class HarStore {
       fileName,
       fileSize,
       fileModified,
+      // Importing a file counts as using the database.
+      lastUsedMs: Date.now(),
       comment: '',
       uncompressedSize: null,
       count: 0,
       firstStartMs: null,
       complete: false,
-      root: {}
+      root: {},
+      view: emptyDbView()
     });
     const tx = db.transaction(META, 'readwrite');
     tx.objectStore(META).put(store.toMeta(false), META_KEY);
@@ -202,11 +230,45 @@ export class HarStore {
     }
   }
 
+  // Sets the name and comment of this store in one write (used while it is being imported too).
+  async setDetails(fileName: string, comment: string): Promise<void> {
+    this.fileName = fileName;
+    this.comment = comment;
+    const tx = this.db.transaction(META, 'readwrite');
+    tx.objectStore(META).put(this.toMeta(this.complete), META_KEY);
+    await transactionDone(tx);
+  }
+
   // Sets the comment of this store (used while it is being imported too).
   async setComment(comment: string): Promise<void> {
     this.comment = comment;
     const tx = this.db.transaction(META, 'readwrite');
     tx.objectStore(META).put(this.toMeta(this.complete), META_KEY);
+    await transactionDone(tx);
+  }
+
+  // Records that the database was used now (opened for viewing).
+  async markUsed(): Promise<void> {
+    const now = Date.now();
+    this.lastUsedMs = now;
+    const tx = this.db.transaction(META, 'readwrite');
+    const metaStore = tx.objectStore(META);
+    const meta = await request<HarMeta | undefined>(metaStore.get(META_KEY));
+    if (!meta) throw new Error('The stored database could not be read');
+    metaStore.put({ ...meta, lastUsedMs: now }, META_KEY);
+    await transactionDone(tx);
+  }
+
+  // Stores the view state (filter, custom columns, highlight rules) in the
+  // metadata. Only the view field is replaced, so a comment changed through
+  // another connection is kept.
+  async setView(view: DbView): Promise<void> {
+    this.view = view;
+    const tx = this.db.transaction(META, 'readwrite');
+    const metaStore = tx.objectStore(META);
+    const meta = await request<HarMeta | undefined>(metaStore.get(META_KEY));
+    if (!meta) throw new Error('The stored database could not be read');
+    metaStore.put({ ...meta, view }, META_KEY);
     await transactionDone(tx);
   }
 
@@ -324,12 +386,14 @@ export class HarStore {
       fileName: this.fileName,
       fileSize: this.fileSize,
       fileModified: this.fileModified,
+      lastUsedMs: this.lastUsedMs,
       comment: this.comment,
       uncompressedSize: this.uncompressedSize,
       count: this.count,
       firstStartMs: this.firstStartMs,
       complete,
-      root: this.root
+      root: this.root,
+      view: this.view
     };
   }
 

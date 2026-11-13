@@ -11,12 +11,14 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Import runs in the background, with a progress bar and request count per
   database; a notification reports file sizes and the request count when done
 - Only complete databases can be opened; incomplete ones are flagged and can be deleted
-- Each database shows its file time (human-readable) and an editable comment;
-  the comment is taken from the HAR's `log.comment` when present
+- Each database shows its file time and when it was last used (set on import and
+  every time it is opened), both human-readable, plus an editable comment
 - Databases can be deleted (with confirmation) and reordered by dragging the
   `⋮⋮` handle on the right of a row; the order is kept in the browser
 - Importing a file that is already stored asks whether to reuse the stored copy
-  or override it; a name prompt lets you choose the database name on upload
+  or override it; on upload, once the file is read, one dialog asks for the
+  database name and a comment (pre-filled with the file name and the HAR's
+  `log.comment` when present)
 - Requests are stored in IndexedDB, so large archives do not have to fit in memory;
   filtering runs against the database, and only the visible rows are read
 - Filterable request table (Fiddler-style) with a simple query syntax

@@ -3,15 +3,17 @@ import {FileDropZone} from './components/FileDropZone.js';
 import {RequestTable} from './components/RequestTable.js';
 import {HighlightBar} from './components/HighlightBar.js';
 import {DetailPanel} from './components/DetailPanel.js';
-import {askChoice, askText} from './components/ChoiceDialog.js';
+import {askChoice, askFields, askText} from './components/ChoiceDialog.js';
 import {makeResizer} from './utils/resizer.js';
-import {addCustomColumn, loadCustomColumns, removeCustomColumn, saveCustomColumns} from './utils/customColumns.js';
+import {addCustomColumn, removeCustomColumn} from './utils/customColumns.js';
 import {nextPaint, parseJsonFileStreaming} from './utils/fileLoader.js';
-import {HarStore, dbNameFor} from './utils/harStore.js';
-import type {StoredRow} from './utils/harStore.js';
+import {HarStore, dbNameFor, emptyDbView} from './utils/harStore.js';
+import type {DbView, StoredRow} from './utils/harStore.js';
 import {applyDbOrder, loadDbOrder, saveDbOrder} from './utils/dbOrder.js';
 import {DatabaseList} from './components/DatabaseList.js';
 import type {DatabaseListItem} from './components/DatabaseList.js';
+import {parseHighlightRule} from './utils/highlightRules.js';
+import type {HighlightRule} from './utils/highlightRules.js';
 import type {HarData} from './types/har.js';
 import pkg from '../package.json';
 
@@ -44,6 +46,9 @@ class HarViewerApp {
   private readonly busy = new Set<string>();
   private databaseList: DatabaseList;
   private listRenderQueued = false;
+  private highlightBar: HighlightBar;
+  // View state (filter, custom columns, highlight rules) of the shown database.
+  private view: DbView = emptyDbView();
 
   constructor() {
     this.harParser = new HarParser();
@@ -73,21 +78,22 @@ class HarViewerApp {
         }
       },
       onCustomColumnRemove: (columnId) => {
-        const columns = this.requestTable.getCustomColumns();
-        const updated = removeCustomColumn(columns, columnId);
-        columns.length = 0;
-        columns.push(...updated);
-        saveCustomColumns(columns);
-        this.requestTable.setCustomColumns(columns);
-      }
+        const updated = removeCustomColumn(this.requestTable.getCustomColumns(), columnId);
+        this.requestTable.setCustomColumns(updated);
+        this.saveView({customColumns: updated});
+      },
+      onFilterChange: (query) => this.saveView({filter: query})
     });
 
     this.detailPanel = new DetailPanel({
       onTimelineRowClick: (entry) => this.requestTable.selectSingleEntry(entry.id)
     });
 
-    new HighlightBar({
-      onChange: (rules) => this.requestTable.setHighlightRules(rules)
+    this.highlightBar = new HighlightBar({
+      onChange: (rules) => {
+        this.requestTable.setHighlightRules(rules);
+        this.saveView({highlightRules: rules.map(rule => rule.text)});
+      }
     });
 
     this.init();
@@ -141,14 +147,10 @@ class HarViewerApp {
         }
       }
 
-      // The name shown for the database can be overridden; the identity used
-      // for duplicate detection stays the original file name + modification time.
-      const entered = await askText('Name for this database:', file.name);
-      if (entered === null) return;
-      const displayName = entered || file.name;
-
-      const store = await HarStore.create(name, displayName, file.size, file.lastModified);
-      const job: ImportJob = {name, fileName: displayName, fileSize: file.size, store, fraction: 0};
+      // The database is created under the file's own name; the name and comment
+      // are asked for once the file is read (see runImport).
+      const store = await HarStore.create(name, file.name, file.size, file.lastModified);
+      const job: ImportJob = {name, fileName: file.name, fileSize: file.size, store, fraction: 0};
       this.jobs.set(name, job);
       void this.renderDatabaseList();
       void this.runImport(job, file);
@@ -184,6 +186,20 @@ class HarViewerApp {
       const harData = value as HarData;
       if (!harData || !harData.log) {
         throw new Error('Invalid HAR format: Missing log object');
+      }
+      // Asked once the file is read, so the HAR's own log.comment can be offered
+      // as the default. An empty comment falls back to that comment (see finish).
+      // The name can be overridden; duplicate detection keeps the original file
+      // name + modification time.
+      const harComment = harData.log.comment ?? '';
+      const details = await askFields([
+        {label: 'Name for this database:', value: file.name},
+        {label: 'Comment for this database (what is inside):', value: harComment}
+      ]);
+      if (details) {
+        const [entered = '', comment = ''] = details;
+        job.fileName = entered || file.name;
+        await store.setDetails(job.fileName, comment);
       }
       await store.finish(harData as unknown as Record<string, unknown>, uncompressedSize);
       this.endJob(job);
@@ -234,9 +250,11 @@ class HarViewerApp {
         void this.renderDatabaseList();
         return;
       }
+      await store.markUsed();
       this.closeStore();
       this.store = store;
       this.showStore(store);
+      this.applyView(store.view);
       this.updateFileInfo();
       void this.displayTimeRange(store);
     } catch (error) {
@@ -311,6 +329,32 @@ class HarViewerApp {
       this.listRenderQueued = false;
       void this.renderDatabaseList();
     }, 250);
+  }
+
+  // Restores the view state stored with the database: custom columns, highlight
+  // rules and the filter. Highlight rules that no longer parse are dropped.
+  private applyView(view: DbView): void {
+    this.view = {...view};
+    this.requestTable.setCustomColumns(view.customColumns);
+    const rules: HighlightRule[] = [];
+    for (const text of view.highlightRules) {
+      const result = parseHighlightRule(text);
+      if ('rule' in result) rules.push(result.rule);
+    }
+    this.highlightBar.setRules(rules);
+    this.requestTable.setHighlightRules(rules);
+    this.requestTable.setFilter(view.filter);
+  }
+
+  // Updates the view state and saves it in the metadata of the shown database.
+  private saveView(patch: Partial<DbView>): void {
+    this.view = {...this.view, ...patch};
+    const store = this.store;
+    if (!store) return;
+    store.setView(this.view).catch(error => {
+      console.error('Error saving view settings:', error);
+      this.showMessage('Could not save the view settings.');
+    });
   }
 
   // Shows the table for a store, replacing the drop screen.
@@ -418,8 +462,6 @@ class HarViewerApp {
     const inputEl = document.getElementById('custom-col-input') as HTMLInputElement;
     if (!inputEl) return;
 
-    const columns = loadCustomColumns();
-    this.requestTable.setCustomColumns(columns);
 
     inputEl.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
@@ -437,11 +479,9 @@ class HarViewerApp {
       // Use the part before = as the label; fall back to the full expression.
       const namePart = parts[1]!.split('=')[0] || parts[1];
       const label = parts[0]!.charAt(0).toUpperCase() + parts[0]!.slice(1) + '/' + namePart;
-      const updated = addCustomColumn(columns, label, expr);
-      columns.length = 0;
-      columns.push(...updated);
-      saveCustomColumns(columns);
-      this.requestTable.setCustomColumns(columns);
+      const updated = addCustomColumn(this.requestTable.getCustomColumns(), label, expr);
+      this.requestTable.setCustomColumns(updated);
+      this.saveView({customColumns: updated});
       inputEl.value = '';
     });
   }

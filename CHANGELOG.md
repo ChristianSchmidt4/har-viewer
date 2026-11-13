@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- Stored databases show when they were last used (set on import and every time they are opened)
+- Import asks for the database name and a comment in one dialog once the file is read; the comment is pre-filled with the HAR's `log.comment`
+- Request-table filter, custom columns and highlight rules are saved in each database and restored when it is opened
+
+### Changed
+- Custom columns are no longer stored in localStorage; columns saved before must be added again once
+
 ## [1.9.0] - 2026-11-12
 
 ### Added

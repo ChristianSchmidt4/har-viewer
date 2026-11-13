@@ -1,11 +1,11 @@
-// Persistence layer for request-table custom columns.
+// Model and evaluation of request-table custom columns.
 //
 // Users can add columns by specifying an expression like:
 //   reqheader:X-Trace          -> value of the "X-Trace" request header
 //   resheader:Content-Encoding -> value of the "Content-Encoding" response header
 //   reqcookie:sessionid        -> value of the "sessionid" request cookie
 //
-// Stored in localStorage under the given key, typed as CustomColumn[].
+// Columns are saved per database (see DbView in harStore.ts).
 
 import type { HarHeader, HarCookie, ParsedEntry } from '@/types/har';
 
@@ -15,23 +15,6 @@ export interface CustomColumn {
   expression: string;     // the user-entered expression
 }
 
-const STORAGE_KEY = 'har-viewer-custom-columns';
-
-export function loadCustomColumns(key = STORAGE_KEY): CustomColumn[] {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(c => c.id && c.label && c.expression);
-  } catch {
-    return [];
-  }
-}
-
-export function saveCustomColumns(columns: CustomColumn[], key = STORAGE_KEY): void {
-  localStorage.setItem(key, JSON.stringify(columns));
-}
 
 export function addCustomColumn(columns: CustomColumn[], label: string, expression: string): CustomColumn[] {
   const column: CustomColumn = {

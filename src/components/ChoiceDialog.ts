@@ -100,3 +100,54 @@ export function askText(message: string, defaultValue: string): Promise<string |
     input.select();
   });
 }
+
+export interface DialogField {
+  label: string;
+  value: string;
+}
+// Modal dialog with one text field per entry. Resolves with the trimmed values
+// in the same order, or null when dismissed (Escape / Cancel).
+export function askFields(fields: DialogField[]): Promise<string[] | null> {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'choice-dialog';
+    const form = document.createElement('form');
+    form.method = 'dialog';
+    const inputs = fields.map(field => {
+      const label = document.createElement('label');
+      label.className = 'choice-text-label';
+      label.textContent = field.label;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'choice-text-input';
+      input.value = field.value;
+      label.appendChild(input);
+      form.appendChild(label);
+      return input;
+    });
+    const actions = document.createElement('div');
+    actions.className = 'choice-actions';
+    const ok = document.createElement('button');
+    ok.type = 'submit';
+    ok.className = 'primary';
+    ok.textContent = 'OK';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => dialog.close());
+    actions.append(ok, cancel);
+    form.appendChild(actions);
+    dialog.appendChild(form);
+    let result: string[] | null = null;
+    form.addEventListener('submit', () => {
+      result = inputs.map(input => input.value.trim());
+    });
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      resolve(result);
+    });
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    inputs[0]?.select();
+  });
+}

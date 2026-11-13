@@ -101,10 +101,13 @@ export class DatabaseList {
     const fileTime = document.createElement('div');
     fileTime.className = 'db-file-time';
     fileTime.textContent = this.options.formatDateTime(item.fileModified);
+    const lastUsed = document.createElement('div');
+    lastUsed.className = 'db-file-time';
+    lastUsed.textContent = `Last used: ${item.lastUsedMs != null ? this.options.formatDateTime(item.lastUsedMs) : 'never'}`;
     const details = document.createElement('div');
     details.className = 'db-details';
     details.textContent = this.describe(item);
-    main.append(title, fileTime, details);
+    main.append(title, fileTime, lastUsed, details);
     if (item.importing) {
       const track = document.createElement('div');
       track.className = 'db-progress-track';

@@ -63,6 +63,12 @@ export class HighlightBar {
     this.commit();
   }
 
+  // Replaces the rules without calling onChange (used when a database is opened).
+  setRules(rules: HighlightRule[]): void {
+    this.rules.splice(0, this.rules.length, ...rules);
+    this.renderRules();
+  }
+
   private commit(): void {
     this.renderRules();
     this.onChange([...this.rules]);

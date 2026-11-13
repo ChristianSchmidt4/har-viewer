@@ -228,6 +228,37 @@ describe('HarStore highlighting of database rows', () => {
   });
 });
 
+describe('HarStore view state', () => {
+  it('keeps the view state in the metadata and restores it on open', async () => {
+    const name = freshName();
+    (await load(name, ENTRIES)).close();
+    const reopened = await HarStore.open(name);
+    expect(reopened.view).toEqual({ filter: '', customColumns: [], highlightRules: [] });
+    const view = {
+      filter: 'status:200',
+      customColumns: [{ id: 'c1', label: 'Req/x', expression: 'reqheader:x' }],
+      highlightRules: ['status:200 => red'],
+    };
+    await reopened.setView(view);
+    reopened.close();
+    const again = await HarStore.open(name);
+    expect(again.view).toEqual(view);
+    again.close();
+    expect((await HarStore.inspect(name))?.view).toEqual(view);
+  });
+
+  it('keeps a comment changed through another connection when the view is saved', async () => {
+    const name = freshName();
+    const store = await load(name, ENTRIES);
+    await HarStore.updateComment(name, 'changed elsewhere');
+    await store.setView({ filter: 'method:get', customColumns: [], highlightRules: [] });
+    store.close();
+    const listed = (await HarStore.list()).find(d => d.name === name);
+    expect(listed).toMatchObject({ comment: 'changed elsewhere' });
+    expect((await HarStore.inspect(name))?.view?.filter).toBe('method:get');
+  });
+});
+
 describe('HarStore upload', () => {
   // Mirrors index.ts runImport: stream the File in batches into the store, then finish.
   const upload = async (name: string, json: string, batchSize: number) => {
@@ -273,5 +304,43 @@ describe('HarStore upload', () => {
     expect(store.comment).toBe('from upload');
     expect(store.count).toBe(3);
     store.close();
+  });
+});
+describe('HarStore last used', () => {
+  it('sets the last-used time on import and updates it when the database is opened', async () => {
+    const name = freshName();
+    (await load(name, ENTRIES)).close();
+    const created = (await HarStore.list()).find(d => d.name === name);
+    expect(created?.lastUsedMs).toEqual(expect.any(Number));
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const reopened = await HarStore.open(name);
+    await reopened.markUsed();
+    expect(reopened.lastUsedMs).toBeGreaterThan(created!.lastUsedMs!);
+    reopened.close();
+    const listed = (await HarStore.list()).find(d => d.name === name);
+    expect(listed?.lastUsedMs).toBe(reopened.lastUsedMs);
+    expect(listed?.comment).toBe('');
+  });
+});
+
+describe('HarStore name and comment on import', () => {
+  it('stores the name and comment chosen in the import dialog', async () => {
+    const name = freshName();
+    const store = await HarStore.create(name, 'file.har', 1234, 1000);
+    await store.setDetails('My checkout', 'checkout flow');
+    await store.writeBatch(ENTRIES as unknown as HarEntryRaw[]);
+    await store.finish(root([]), 123);
+    store.close();
+    const listed = (await HarStore.list()).find(d => d.name === name);
+    expect(listed).toMatchObject({ fileName: 'My checkout', comment: 'checkout flow', complete: true });
+  });
+  it('keeps the HAR log comment when the dialog comment is left empty', async () => {
+    const name = freshName();
+    const store = await HarStore.create(name, 'file.har', 1234, 1000);
+    await store.setDetails('file.har', '');
+    await store.finish({ log: { comment: 'from file', entries: [] } }, null);
+    store.close();
+    const listed = (await HarStore.list()).find(d => d.name === name);
+    expect(listed).toMatchObject({ fileName: 'file.har', comment: 'from file' });
   });
 });
