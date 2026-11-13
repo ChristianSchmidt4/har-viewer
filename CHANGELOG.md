@@ -10,9 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stored databases show when they were last used (set on import and every time they are opened)
 - Import asks for the database name and a comment in one dialog once the file is read; the comment is pre-filled with the HAR's `log.comment`
 - Request-table filter, custom columns and highlight rules are saved in each database and restored when it is opened
+- Imported HAR files are stored in IndexedDB, one database per file, with a start-page database manager (status, file time, comment, delete, drag-to-reorder) (`9297b9a`)
+- Filter results are cached in the database and reused when it is reopened with the same query (`b25ff5e`)
 
 ### Changed
 - Custom columns are no longer stored in localStorage; columns saved before must be added again once
+- The request-table filter is applied on Enter or when the input loses focus, with a loading indicator while filtering (`88c73bf`)
+- HAR entries are parsed and imported in batches of 1000; items that fail to parse appear as flagged rows (`45658d5`)
+- The "Invalid JSON format" message includes the parse error details (`86a5124`, `be8e370`)
+- Licensed under a custom non-commercial license instead of MIT (`5fc258b`)
+- Vite config uses `import.meta.dirname` instead of `__dirname` (`86c1070`)
 
 ## [1.9.0] - 2026-11-12
 

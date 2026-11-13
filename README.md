@@ -20,22 +20,24 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   database name and a comment (pre-filled with the file name and the HAR's
   `log.comment` when present)
 - Requests are stored in IndexedDB, so large archives do not have to fit in memory;
-  filtering runs against the database, and only the visible rows are read
+  filtering runs against the database, and only the visible rows are read;
+  the filter is applied on Enter or when the input loses focus, and its result
+  is cached in the database so reopening with the same query is instant
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
 - Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
   (e.g. `status:>=400 => red fire`; the action defaults to `add`) color, tag or
   restyle matching rows with any CSS named color (`red`, `lightblue`, ...),
   a symbol emoji (`fire`, `warning`, `lock`, ...) or text style (`bold`,
-  `italic`, `underline`, `strikethrough`); rules are applied in order and are not persisted
+  `italic`, `underline`, `strikethrough`); rules are applied in order and are saved per database
 - Split Request / Response detail view, each with **Headers**, **Raw**,
   **Cookies** and **Syntax** (highlighted body) tabs; image responses get an
   **Image** preview tab and font responses a **Font** tab (renders the
   pangram, the Latin alphabet, several sizes and text styles with the file's own font)
 - Custom request-table columns: type e.g. `reqheader:X-Trace`,
   `resheader:Content-Encoding`, `reqcookie:sessionid` or `rescookie:track`
-  into the column input to show that value per request; columns persist in
-  localStorage and are removed with the `×` on their header
+  into the column input to show that value per request; columns are saved per
+  database and removed with the `×` on their header
 - Multi-select (Ctrl/Cmd- or Shift-click) shows an aggregate view with a
   **Timeline** waterfall and a **Stats** summary
 - Header shows the archive's start time and total duration
