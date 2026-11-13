@@ -369,7 +369,7 @@ button:hover {
 .app-version {
   position: fixed;
   bottom: 2px;
-  right: 6px;
+  right: 24px;
   font-size: 0.65rem;
   opacity: 0.5;
   pointer-events: none;
