@@ -1,6 +1,6 @@
 {
   "name": "har-viewer",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "description": "A client-side HAR (HTTP Archive) viewer inspired by Fiddler",
   "main": "src/index.ts",
   "scripts": {
