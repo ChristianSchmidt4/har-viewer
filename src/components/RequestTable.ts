@@ -27,7 +27,7 @@ interface Column {
 }
 
 const COLUMNS: Column[] = [
-  {key: 'index', label: '   #'},
+  {key: 'index', label: '     #'},
   {key: 'status', label: 'Code'},
   {key: 'protocol', label: 'Protocol'},
   {key: 'host', label: 'Host', width: 10},
@@ -77,9 +77,12 @@ export class RequestTable {
   private selectedEntryIds: Set<number>;
   private lastSelectedEntryId: number | null;
 
-  private filterDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   private filterInputEl: HTMLInputElement;
   private filterHintEl: HTMLElement;
+  private filterBusyEl: HTMLElement;
+  private filterBusyLabelEl: HTMLElement;
+  // True until the first filter pass over a newly attached store completes.
+  private initialLoad: boolean;
   private tableBodyEl: HTMLElement;
   private resultCountEl: HTMLElement;
   private theadEl: HTMLElement;
@@ -120,6 +123,9 @@ export class RequestTable {
 
     this.filterInputEl = document.getElementById('request-filter') as HTMLInputElement;
     this.filterHintEl = document.getElementById('filter-hint')!;
+    this.filterBusyEl = document.getElementById('filter-busy')!;
+    this.filterBusyLabelEl = document.getElementById('filter-busy-label')!;
+    this.initialLoad = false;
     this.tableBodyEl = document.getElementById('requests-table-body')!;
     this.resultCountEl = document.getElementById('result-count')!;
     this.theadEl = document.getElementById('requests-table-thead')!;
@@ -134,12 +140,15 @@ export class RequestTable {
     // A resized pane changes how many rows fit in the viewport.
     new ResizeObserver(() => void this.renderWindow()).observe(this.scrollEl);
 
-    this.filterInputEl.addEventListener('input', () => {
-      clearTimeout(this.filterDebounceTimer);
-      this.filterDebounceTimer = setTimeout(() => {
-        this.onFilterChange?.(this.filterInputEl.value);
-        this.refresh();
-      }, 250);
+    // Filtering large stores is slow, so the query is applied only when the
+    // user presses Enter or leaves the input (not on every keystroke).
+    const applyFilter = (): void => {
+      this.onFilterChange?.(this.filterInputEl.value);
+      this.refresh();
+    };
+    this.filterInputEl.addEventListener('change', applyFilter);
+    this.filterInputEl.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') applyFilter();
     });
 
     // Toggle the filter syntax hint on focus for discoverability.
@@ -207,8 +216,8 @@ export class RequestTable {
     this.generation++;
     this.renderToken++;
     this.selectionToken++;
-    clearTimeout(this.filterDebounceTimer);
     this.store = store;
+    this.initialLoad = store !== null;
     this.visibleIds = [];
     this.appliedQuery = '';
     this.indexedCount = 0;
@@ -274,7 +283,8 @@ export class RequestTable {
     const generation = this.generation;
 
     const query = this.filterInputEl.value;
-    if (query !== this.appliedQuery) {
+    const queryChanged = query !== this.appliedQuery;
+    if (queryChanged) {
       this.appliedQuery = query;
       this.visibleIds = [];
       this.indexedCount = 0;
@@ -282,10 +292,19 @@ export class RequestTable {
 
     const target = store.count;
     if (target > this.indexedCount) {
-      const ids = await store.filterIds(query, this.indexedCount, target);
-      if (generation !== this.generation) return;
-      for (const id of ids) this.visibleIds.push(id);
-      this.indexedCount = target;
+      this.filterBusyLabelEl.textContent = queryChanged && !this.initialLoad
+        ? 'Filtering…'
+        : 'Loading requests…';
+      this.filterBusyEl.hidden = false;
+      try {
+        const ids = await store.filterIds(query, this.indexedCount, target);
+        if (generation !== this.generation) return;
+        for (const id of ids) this.visibleIds.push(id);
+        this.indexedCount = target;
+      } finally {
+        this.filterBusyEl.hidden = true;
+      }
+      this.initialLoad = false;
     }
     this.render();
   }

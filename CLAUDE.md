@@ -131,8 +131,12 @@ is needed for development. See [TypeScript](#typescript) below.
    indicator and calls `onReorder(names)`, which `index.ts` saves via
    `dbOrder.ts` and re-renders.
 2. **RequestTable** (`RequestTable.ts`) - Left-pane filterable table. Owns
-   the filter input, debounces keystrokes 250ms before re-filtering via
-   `filterParser`, and renders rows with columns: index, response code,
+   the filter input; the query is applied only on Enter or when the input
+   loses focus (not per keystroke), re-filtering via `filterParser`. While
+   rows are loading from the DB (first open) or being filtered, a spinner
+   note (`#filter-busy`, label "Loading requests…" / "Filtering…") is shown
+   centered over the table (`.request-table-area` wrapper).
+   It renders rows with columns: index, response code,
    protocol, host, path, body size (request + response body bytes, with
    unknown `-1` sizes counted as 0; `N/A` only if both are unknown),
    content-type, duration, and relative start time. Column widths are fixed
