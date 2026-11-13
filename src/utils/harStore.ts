@@ -14,6 +14,9 @@ const DB_PREFIX = 'har:';
 const ROWS = 'rows';
 const META = 'meta';
 const META_KEY = 'meta';
+// Key of the last filter result in the META store (kept apart from meta so
+// filter changes do not rewrite the whole metadata record).
+const FILTER_CACHE_KEY = 'filterCache';
 // Number of rows read per transaction while exporting.
 const EXPORT_CHUNK_SIZE = 500;
 
@@ -30,6 +33,14 @@ export interface DbView {
 
 export function emptyDbView(): DbView {
   return { filter: '', customColumns: [], highlightRules: [] };
+}
+
+// Indices matching the filter query of a complete database, kept so reopening
+// the database does not have to scan every row again.
+export interface FilterCache {
+  query: string;
+  count: number;
+  ids: number[];
 }
 
 interface HarMeta {
@@ -117,6 +128,7 @@ export class HarStore {
   view: DbView;
 
   private root: Record<string, unknown>;
+  private filterCache: FilterCache | null;
   private readonly db: IDBDatabase;
   private readonly parser: HarParser;
 
@@ -135,6 +147,7 @@ export class HarStore {
     this.complete = meta.complete;
     this.view = meta.view ?? emptyDbView();
     this.root = meta.root;
+    this.filterCache = null;
   }
 
   // Returns the stored metadata when a complete copy exists, otherwise null.
@@ -171,14 +184,17 @@ export class HarStore {
   // Opens a stored database (complete or still importing) for reading.
   static async open(name: string): Promise<HarStore> {
     const db = await openDatabase(name);
-    const meta = await request<HarMeta | undefined>(
-      db.transaction(META, 'readonly').objectStore(META).get(META_KEY)
-    );
+    const metaStore = db.transaction(META, 'readonly').objectStore(META);
+    const meta = await request<HarMeta | undefined>(metaStore.get(META_KEY));
     if (!meta) {
       db.close();
       throw new Error('The stored database could not be read');
     }
-    return new HarStore(name, db, meta);
+    const store = new HarStore(name, db, meta);
+    store.filterCache = (await request<FilterCache | undefined>(
+      db.transaction(META, 'readonly').objectStore(META).get(FILTER_CACHE_KEY)
+    )) ?? null;
+    return store;
   }
 
   // Starts a fresh (empty) store, replacing anything stored under this name.
@@ -331,9 +347,15 @@ export class HarStore {
   }
 
   // Indices in [from, to) whose entry matches the filter query, ascending.
+  // A full pass over a complete database is cached in its metadata, so the
+  // same query is answered from the cache when the database is reopened.
   async filterIds(query: string, from: number, to: number): Promise<number[]> {
     if (to <= from) return [];
     if (!query.trim()) return this.allKeys(from, to);
+
+    const cacheable = this.complete && from === 0 && to === this.count;
+    const cache = this.filterCache;
+    if (cacheable && cache && cache.query === query && cache.count === to) return cache.ids;
 
     const matches = compileFilterQuery(query);
     const ids: number[] = [];
@@ -347,7 +369,19 @@ export class HarStore {
       cursor.continue();
     };
     await transactionDone(tx);
+    if (cacheable) {
+      this.filterCache = { query, count: to, ids };
+      // A failed write only costs a rescan on the next open.
+      this.saveFilterCache().catch(error => console.error('Could not cache the filter result', error));
+    }
     return ids;
+  }
+
+  // Writes the in-memory filter cache under its own key of the META store.
+  private async saveFilterCache(): Promise<void> {
+    const tx = this.db.transaction(META, 'readwrite');
+    tx.objectStore(META).put(this.filterCache, FILTER_CACHE_KEY);
+    await transactionDone(tx);
   }
 
   // Builds a standalone HAR file holding the given entries (invalid entries

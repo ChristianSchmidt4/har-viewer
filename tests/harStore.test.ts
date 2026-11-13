@@ -27,6 +27,34 @@ const root = (entries: unknown[]) => ({ log: { version: '1.2', creator: { name: 
 let counter = 0;
 const freshName = () => `har:test-${++counter}`;
 
+// Raw access to a key of the META store, for checking what is persisted.
+const openRaw = (name: string) =>
+  new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(name);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+const readMetaKey = async (name: string, key: string): Promise<any> => {
+  const db = await openRaw(name);
+  const value = await new Promise<unknown>((resolve, reject) => {
+    const req = db.transaction('meta', 'readonly').objectStore('meta').get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return value;
+};
+const writeMetaKey = async (name: string, key: string, value: unknown): Promise<void> => {
+  const db = await openRaw(name);
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('meta', 'readwrite');
+    tx.objectStore('meta').put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+};
+
 // Loads the given items into a new store, the way handleFile does.
 const load = async (name: string, items: unknown[]) => {
   const store = await HarStore.create(name, 'file.har', 1234, 1000);
@@ -151,6 +179,25 @@ describe('HarStore', () => {
     expect(await store.filterIds('method:get', 1, 3)).toEqual([2]);
     expect(await store.filterIds('', 2, 2)).toEqual([]);
     store.close();
+  });
+
+  it('caches the filter result under its own key and reuses it for the same query on reopen', async () => {
+    const name = freshName();
+    (await load(name, ENTRIES)).close();
+
+    const store = await HarStore.open(name);
+    expect(await store.filterIds('method:get', 0, 3)).toEqual([0, 2]);
+    store.close();
+    expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'method:get', count: 3, ids: [0, 2] });
+    expect(await readMetaKey(name, 'meta')).not.toHaveProperty('filterCache');
+
+    // Replace the cached ids to show a reopened store answers from the cache.
+    await writeMetaKey(name, 'filterCache', { query: 'method:get', count: 3, ids: [9] });
+    const reopened = await HarStore.open(name);
+    expect(await reopened.filterIds('method:get', 0, 3)).toEqual([9]);
+    expect(await reopened.filterIds('status:404', 0, 3)).toEqual([2]);
+    reopened.close();
+    expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'status:404', count: 3, ids: [2] });
   });
 
   it('exports the given entries as a HAR document and skips invalid items', async () => {

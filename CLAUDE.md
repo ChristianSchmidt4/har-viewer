@@ -220,15 +220,14 @@ is needed for development. See [TypeScript](#typescript) below.
      response bytes by content-type.
 
 10. **HarStore** (`harStore.ts`) - Per-file IndexedDB store of raw HAR entries
-   (`rows` keyed by array index, `meta` for file name/size, file modification
-   time, last-used time, comment, completion, count, root and view state). `dbNameFor(name, lastModified)`, `HarStore.list()` (all stored
+ `dbNameFor(name, lastModified)`, `HarStore.list()` (all stored
    DBs, complete or not), `HarStore.inspect` (complete only), `HarStore.open`
    (used by the app only for complete DBs), `create(name, fileName, fileSize, fileModified)` (replaces
    an existing DB of that name), `HarStore.updateComment(name, comment)` (for DBs not
    being imported) and the instance `setComment(comment)` (for running imports, so
    batch writes keep the comment), `markUsed()` (sets the last-used time; `create` sets it on import, and the app calls it when a database is opened), `setView(view)` (filter, custom columns and highlight rules, stored as `DbView` in the metadata), `deleteDatabase`, `writeBatch` (rows and count
    in one transaction), `finish`, `getEntries(ids)`, `filterIds(query, from, to)`
-   (uses `compileFilterQuery`), and `exportBlob(ids)`.
+   (uses `compileFilterQuery`; a full pass over a complete DB is cached under its own `filterCache` key in the META store, so reopening with the same filter reuses the saved indices instead of scanning rows), and `exportBlob(ids)`.
 11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
    text fields in one dialog, e.g. name + comment on import) show a modal `<dialog>` and resolve to
