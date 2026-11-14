@@ -6,7 +6,7 @@
 import { HarParser } from './harParser.js';
 import { compileFilterQuery } from './filterParser.js';
 import { isInvalidItem } from './jsonArraySplitter.js';
-import type { HarEntryRaw, InvalidItem, ParsedEntry } from '../types/har.js';
+import type { HarEntryRaw, InvalidItem, ParsedEntry } from '@/types/har';
 import type { CustomColumn } from './customColumns.js';
 
 const DB_VERSION = 1;
@@ -14,6 +14,8 @@ const DB_PREFIX = 'har:';
 const ROWS = 'rows';
 const META = 'meta';
 const META_KEY = 'meta';
+const CUSTOM_COLUMNS_KEY = 'customColumns';
+const HIGHLIGHT_RULES_KEY = 'highlightRules';
 // Key of the last filter result in the META store (kept apart from meta so
 // filter changes do not rewrite the whole metadata record).
 const FILTER_CACHE_KEY = 'filterCache';
@@ -39,8 +41,20 @@ export function emptyDbView(): DbView {
 // the database does not have to scan every row again.
 export interface FilterCache {
   query: string;
-  count: number;
-  ids: number[];
+  count?: number;
+  ids?: number[];
+}
+
+function isValidFilterCache(value: unknown): value is FilterCache {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Partial<FilterCache> & Record<string, unknown>;
+  if (typeof record.query !== 'string' || record.query.trim() === '') return false;
+  if (record.count !== undefined && typeof record.count !== 'number') return false;
+  return Array.isArray(record.ids);
+}
+
+function getFilterCacheValue(store: IDBObjectStore): Promise<FilterCache | null> {
+  return request<unknown>(store.get(FILTER_CACHE_KEY)).then(value => (isValidFilterCache(value) ? value : null));
 }
 
 interface HarMeta {
@@ -59,9 +73,8 @@ interface HarMeta {
   complete: boolean;
   // The HAR document with log.entries removed.
   root: Record<string, unknown>;
-  // Absent in databases stored before view state was kept here.
-  view?: DbView;
 }
+
 
 export interface DatabaseSummary {
   name: string;
@@ -145,7 +158,7 @@ export class HarStore {
     this.count = meta.count;
     this.firstStartMs = meta.firstStartMs;
     this.complete = meta.complete;
-    this.view = meta.view ?? emptyDbView();
+    this.view = emptyDbView();
     this.root = meta.root;
     this.filterCache = null;
   }
@@ -191,9 +204,8 @@ export class HarStore {
       throw new Error('The stored database could not be read');
     }
     const store = new HarStore(name, db, meta);
-    store.filterCache = (await request<FilterCache | undefined>(
-      db.transaction(META, 'readonly').objectStore(META).get(FILTER_CACHE_KEY)
-    )) ?? null;
+    store.view = await HarStore.readView(metaStore, meta);
+    store.filterCache = await getFilterCacheValue(db.transaction(META, 'readonly').objectStore(META));
     return store;
   }
 
@@ -212,11 +224,13 @@ export class HarStore {
       count: 0,
       firstStartMs: null,
       complete: false,
-      root: {},
-      view: emptyDbView()
+      root: {}
     });
     const tx = db.transaction(META, 'readwrite');
-    tx.objectStore(META).put(store.toMeta(false), META_KEY);
+    const metaStore = tx.objectStore(META);
+    metaStore.put(store.toMeta(false), META_KEY);
+    metaStore.put(store.view.customColumns, CUSTOM_COLUMNS_KEY);
+    metaStore.put(store.view.highlightRules, HIGHLIGHT_RULES_KEY);
     await transactionDone(tx);
     return store;
   }
@@ -275,17 +289,42 @@ export class HarStore {
     await transactionDone(tx);
   }
 
-  // Stores the view state (filter, custom columns, highlight rules) in the
-  // metadata. Only the view field is replaced, so a comment changed through
-  // another connection is kept.
+  // Stores the view state (filter, custom columns, highlight rules) as separate
+  // records so the main metadata row remains compact and legacy nested view data
+  // can be ignored. The filter is kept with the cached full-filter result, so it
+  // lives under the same FILTER_CACHE_KEY row instead of needing its own key.
   async setView(view: DbView): Promise<void> {
     this.view = view;
     const tx = this.db.transaction(META, 'readwrite');
     const metaStore = tx.objectStore(META);
-    const meta = await request<HarMeta | undefined>(metaStore.get(META_KEY));
-    if (!meta) throw new Error('The stored database could not be read');
-    metaStore.put({ ...meta, view }, META_KEY);
+    if (!view.filter.trim()) {
+      this.filterCache = null;
+      metaStore.delete(FILTER_CACHE_KEY);
+    } else {
+      this.filterCache = {
+        query: view.filter,
+        count: this.count,
+        ids: this.filterCache?.query === view.filter && Array.isArray(this.filterCache.ids) ? this.filterCache.ids : []
+      };
+      metaStore.put(this.filterCache, FILTER_CACHE_KEY);
+    }
+    metaStore.put(view.customColumns, CUSTOM_COLUMNS_KEY);
+    metaStore.put(view.highlightRules, HIGHLIGHT_RULES_KEY);
     await transactionDone(tx);
+  }
+
+  private static async readView(metaStore: IDBObjectStore, meta: HarMeta): Promise<DbView> {
+    const legacyView = 'view' in meta ? (meta as HarMeta & { view?: DbView }).view : undefined;
+    const [filterCache, customColumns, highlightRules] = await Promise.all([
+      getFilterCacheValue(metaStore),
+      request<CustomColumn[] | undefined>(metaStore.get(CUSTOM_COLUMNS_KEY)),
+      request<string[] | undefined>(metaStore.get(HIGHLIGHT_RULES_KEY)),
+    ]);
+    return {
+      filter: filterCache?.query ?? legacyView?.filter ?? '',
+      customColumns: customColumns ?? legacyView?.customColumns ?? [],
+      highlightRules: highlightRules ?? legacyView?.highlightRules ?? []
+    };
   }
 
   private static async readMeta(name: string): Promise<HarMeta | null> {
@@ -351,11 +390,16 @@ export class HarStore {
   async filterIds(query: string): Promise<number[]> {
     const count = this.count;
     if (count === 0) return [];
-    if (!query.trim()) return this.allKeys();
+    if (!query.trim()) {
+      this.filterCache = null;
+      return this.allKeys();
+    }
 
     const cacheable = this.complete;
     const cache = this.filterCache;
-    if (cacheable && cache && cache.query === query && cache.count === count) return cache.ids;
+    if (cacheable && cache && cache.query === query && cache.count === count) {
+      return Array.isArray(cache.ids) ? cache.ids : [];
+    }
 
     const matches = compileFilterQuery(query);
     const ids: number[] = [];
@@ -370,7 +414,7 @@ export class HarStore {
     };
     await transactionDone(tx);
     if (cacheable) {
-      this.filterCache = { query, count, ids };
+      this.filterCache = { query, count: this.count, ids };
       // A failed write only costs a rescan on the next open.
       this.saveFilterCache().catch(error => console.error('Could not cache the filter result', error));
     }
@@ -378,9 +422,17 @@ export class HarStore {
   }
 
   // Writes the in-memory filter cache under its own key of the META store.
+  // Empty/no-op filters are not cached: they should fall back to the full id set.
   private async saveFilterCache(): Promise<void> {
     const tx = this.db.transaction(META, 'readwrite');
-    tx.objectStore(META).put(this.filterCache, FILTER_CACHE_KEY);
+    const metaStore = tx.objectStore(META);
+    if (!this.filterCache || this.filterCache.query.trim() === '' || !Array.isArray(this.filterCache.ids)) {
+      metaStore.delete(FILTER_CACHE_KEY);
+      await transactionDone(tx);
+      return;
+    }
+    this.filterCache = { ...this.filterCache, count: this.count };
+    metaStore.put(this.filterCache, FILTER_CACHE_KEY);
     await transactionDone(tx);
   }
 
@@ -426,8 +478,7 @@ export class HarStore {
       count: this.count,
       firstStartMs: this.firstStartMs,
       complete,
-      root: this.root,
-      view: this.view
+      root: this.root
     };
   }
 
