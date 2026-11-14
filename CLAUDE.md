@@ -158,11 +158,11 @@ is needed for development. See [TypeScript](#typescript) below.
    selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
    `onMultiSelect(entries)`. Rows live in the IndexedDB store (`HarStore`):
    the table keeps only the list of matching indices (`visibleIds`), filters
-   incrementally via `HarStore.filterIds`, and reads the rows it displays with
-   `HarStore.getEntries`. `setStore(store)` attaches a file, `refresh()`
-   re-filters, `getVisibleIds()` gives the current filter result (used by
-   export), and `selectSingleEntry(id)` lets the detail panel's timeline
-   select one row programmatically.
+   via `HarStore.filterIds`, and reads the rows it displays with
+   `HarStore.getEntries`. `setStore(store)` attaches a complete database,
+   `setFilter(query)` applies its filter, `getVisibleIds()` gives the current
+   filter result (used by export), and `selectSingleEntry(id)` lets the detail
+   panel's timeline select one row programmatically.
    **Windowed rendering**: only the rows inside the `.request-table-scroll`
    viewport (plus `OVERSCAN_ROWS` above/below) are in the DOM; the rest is
    represented by `tr.spacer` rows whose heights keep the scrollbar at full
@@ -234,7 +234,7 @@ is needed for development. See [TypeScript](#typescript) below.
    an existing DB of that name), `HarStore.updateComment(name, comment)` (for DBs not
    being imported) and the instance `setComment(comment)` (for running imports, so
    batch writes keep the comment), `markUsed()` (sets the last-used time; `create` sets it on import, and the app calls it when a database is opened), `setView(view)` (filter, custom columns and highlight rules, stored as `DbView` in the metadata), `deleteDatabase`, `writeBatch` (rows and count
-   in one transaction), `finish`, `getEntries(ids)`, `filterIds(query, from, to)`
+   in one transaction), `finish`, `getEntries(ids)`, `filterIds(query)`
    (uses `compileFilterQuery`; a full pass over a complete DB is cached under its own `filterCache` key in the META store, so reopening with the same filter reuses the saved indices instead of scanning rows), and `exportBlob(ids)`.
 11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
@@ -326,8 +326,8 @@ Follow these patterns when adding new features:
    job per DB name runs at a time. `nextPaint()` yields between batches.
 3. Rows are parsed on demand: `HarStore.getEntries` runs `HarParser.parseEntries`
    and `assignRelativeTimings` on the rows it reads (`id` = index in `log.entries`)
-4. `RequestTable.refresh` filters the store incrementally and renders the
-   visible window from it; `DetailPanel` starts in its empty state
+4. `RequestTable` filters the complete store and renders the visible window
+   from it; `DetailPanel` starts in its empty state
 5. Selecting a single row calls `DetailPanel.render(entry)`, which renders
    both sides' active sub-tab (Headers/Raw/Cookies/Syntax, plus Image/Font
    on the response side when applicable); selecting 2+

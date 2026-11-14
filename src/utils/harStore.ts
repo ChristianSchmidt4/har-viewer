@@ -346,21 +346,21 @@ export class HarStore {
     return entries;
   }
 
-  // Indices in [from, to) whose entry matches the filter query, ascending.
-  // A full pass over a complete database is cached in its metadata, so the
-  // same query is answered from the cache when the database is reopened.
-  async filterIds(query: string, from: number, to: number): Promise<number[]> {
-    if (to <= from) return [];
-    if (!query.trim()) return this.allKeys(from, to);
+  // Indices whose entry matches the filter query, ascending. A full pass over
+  // a complete database is cached in its metadata for reuse when it is opened.
+  async filterIds(query: string): Promise<number[]> {
+    const count = this.count;
+    if (count === 0) return [];
+    if (!query.trim()) return this.allKeys();
 
-    const cacheable = this.complete && from === 0 && to === this.count;
+    const cacheable = this.complete;
     const cache = this.filterCache;
-    if (cacheable && cache && cache.query === query && cache.count === to) return cache.ids;
+    if (cacheable && cache && cache.query === query && cache.count === count) return cache.ids;
 
     const matches = compileFilterQuery(query);
     const ids: number[] = [];
     const tx = this.db.transaction(ROWS, 'readonly');
-    const cursorReq = tx.objectStore(ROWS).openCursor(IDBKeyRange.bound(from, to - 1));
+    const cursorReq = tx.objectStore(ROWS).openCursor(IDBKeyRange.bound(0, count - 1));
     cursorReq.onsuccess = () => {
       const cursor = cursorReq.result;
       if (!cursor) return;
@@ -370,7 +370,7 @@ export class HarStore {
     };
     await transactionDone(tx);
     if (cacheable) {
-      this.filterCache = { query, count: to, ids };
+      this.filterCache = { query, count, ids };
       // A failed write only costs a rescan on the next open.
       this.saveFilterCache().catch(error => console.error('Could not cache the filter result', error));
     }
@@ -444,9 +444,9 @@ export class HarStore {
     return values;
   }
 
-  private async allKeys(from: number, to: number): Promise<number[]> {
+  private async allKeys(): Promise<number[]> {
     const tx = this.db.transaction(ROWS, 'readonly');
-    const keys = await request(tx.objectStore(ROWS).getAllKeys(IDBKeyRange.bound(from, to - 1)));
+    const keys = await request(tx.objectStore(ROWS).getAllKeys());
     return keys as number[];
   }
 

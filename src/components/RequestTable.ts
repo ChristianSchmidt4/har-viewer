@@ -64,10 +64,8 @@ export class RequestTable {
   private store: HarStore | null;
   // Indices passing the applied filter, ascending.
   private visibleIds: number[];
-  // Filter query the visibleIds were computed for, and the number of store
-  // rows already filtered against it.
-  private appliedQuery: string;
-  private indexedCount: number;
+  // Filter query the visibleIds were computed for; null means not yet filtered.
+  private appliedQuery: string | null;
   // Bumped when the store is replaced so stale async work is discarded.
   private generation: number;
   // Filter and render work is serialized so results cannot interleave.
@@ -107,8 +105,7 @@ export class RequestTable {
 
     this.store = null;
     this.visibleIds = [];
-    this.appliedQuery = '';
-    this.indexedCount = 0;
+    this.appliedQuery = null;
     this.generation = 0;
     this.syncChain = Promise.resolve();
     this.renderToken = 0;
@@ -144,7 +141,7 @@ export class RequestTable {
     // user presses Enter or leaves the input (not on every keystroke).
     const applyFilter = (): void => {
       this.onFilterChange?.(this.filterInputEl.value);
-      this.refresh();
+      this.scheduleFilter();
     };
     this.filterInputEl.addEventListener('change', applyFilter);
     this.filterInputEl.addEventListener('keydown', (event) => {
@@ -219,18 +216,15 @@ export class RequestTable {
     this.store = store;
     this.initialLoad = store !== null;
     this.visibleIds = [];
-    this.appliedQuery = '';
-    this.indexedCount = 0;
+    this.appliedQuery = null;
     this.selectedEntryIds.clear();
     this.lastSelectedEntryId = null;
     this.filterInputEl.value = '';
     this.scrollEl.scrollTop = 0;
-    this.refresh();
+    this.scheduleFilter();
   }
 
-  // Filters any rows added to the store since the last run (progressive
-  // loading) and re-renders. Call again after the store grows.
-  refresh(): void {
+  private scheduleFilter(): void {
     this.syncChain = this.syncChain
       .then(() => this.syncFilter())
       .catch(error => console.error('Filtering failed', error));
@@ -249,7 +243,7 @@ export class RequestTable {
   // Sets the filter query (e.g. restored from the database) and re-filters.
   setFilter(query: string): void {
     this.filterInputEl.value = query;
-    this.refresh();
+    this.scheduleFilter();
   }
 
   // Replaces the highlight rules and re-renders so row classes are updated.
@@ -283,28 +277,23 @@ export class RequestTable {
     const generation = this.generation;
 
     const query = this.filterInputEl.value;
-    const queryChanged = query !== this.appliedQuery;
-    if (queryChanged) {
-      this.appliedQuery = query;
-      this.visibleIds = [];
-      this.indexedCount = 0;
+    if (query === this.appliedQuery) {
+      this.render();
+      return;
     }
 
-    const target = store.count;
-    if (target > this.indexedCount) {
-      this.filterBusyLabelEl.textContent = queryChanged && !this.initialLoad
-        ? 'Filtering…'
-        : 'Loading requests…';
-      this.filterBusyEl.hidden = false;
-      try {
-        const ids = await store.filterIds(query, this.indexedCount, target);
-        if (generation !== this.generation) return;
-        for (const id of ids) this.visibleIds.push(id);
-        this.indexedCount = target;
-      } finally {
-        this.filterBusyEl.hidden = true;
-      }
+    this.visibleIds = [];
+    this.appliedQuery = null;
+    this.filterBusyLabelEl.textContent = this.initialLoad ? 'Loading requests…' : 'Filtering…';
+    this.filterBusyEl.hidden = false;
+    try {
+      const ids = await store.filterIds(query);
+      if (generation !== this.generation || query !== this.filterInputEl.value) return;
+      this.visibleIds = ids;
+      this.appliedQuery = query;
       this.initialLoad = false;
+    } finally {
+      this.filterBusyEl.hidden = true;
     }
     this.render();
   }

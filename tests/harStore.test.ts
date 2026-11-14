@@ -171,13 +171,11 @@ describe('HarStore', () => {
     store.close();
   });
 
-  it('filters ids by query within a range', async () => {
+  it('filters ids by query across the database', async () => {
     const store = await load(freshName(), ENTRIES);
-    expect(await store.filterIds('', 0, 3)).toEqual([0, 1, 2]);
-    expect(await store.filterIds('status:200', 0, 3)).toEqual([0]);
-    expect(await store.filterIds('method:get', 0, 3)).toEqual([0, 2]);
-    expect(await store.filterIds('method:get', 1, 3)).toEqual([2]);
-    expect(await store.filterIds('', 2, 2)).toEqual([]);
+    expect(await store.filterIds('')).toEqual([0, 1, 2]);
+    expect(await store.filterIds('status:200')).toEqual([0]);
+    expect(await store.filterIds('method:get')).toEqual([0, 2]);
     store.close();
   });
 
@@ -186,7 +184,7 @@ describe('HarStore', () => {
     (await load(name, ENTRIES)).close();
 
     const store = await HarStore.open(name);
-    expect(await store.filterIds('method:get', 0, 3)).toEqual([0, 2]);
+    expect(await store.filterIds('method:get')).toEqual([0, 2]);
     store.close();
     expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'method:get', count: 3, ids: [0, 2] });
     expect(await readMetaKey(name, 'meta')).not.toHaveProperty('filterCache');
@@ -194,8 +192,8 @@ describe('HarStore', () => {
     // Replace the cached ids to show a reopened store answers from the cache.
     await writeMetaKey(name, 'filterCache', { query: 'method:get', count: 3, ids: [9] });
     const reopened = await HarStore.open(name);
-    expect(await reopened.filterIds('method:get', 0, 3)).toEqual([9]);
-    expect(await reopened.filterIds('status:404', 0, 3)).toEqual([2]);
+    expect(await reopened.filterIds('method:get')).toEqual([9]);
+    expect(await reopened.filterIds('status:404')).toEqual([2]);
     reopened.close();
     expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'status:404', count: 3, ids: [2] });
   });
@@ -238,25 +236,25 @@ describe('HarStore filtering on sub-attributes', () => {
 
   it('matches request and response headers stored in the database', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('reqheader:user-agent=chromium', 0, 3)).toEqual([0]);
-    expect(await store.filterIds('reqheader:user-agent', 0, 3)).toEqual([0, 1]);
-    expect(await store.filterIds('resheader:x-execution-id', 0, 3)).toEqual([0]);
-    expect(await store.filterIds('reqheader:user-agent=chromium or resheader:set-cookie', 0, 3)).toEqual([0, 2]);
+    expect(await store.filterIds('reqheader:user-agent=chromium')).toEqual([0]);
+    expect(await store.filterIds('reqheader:user-agent')).toEqual([0, 1]);
+    expect(await store.filterIds('resheader:x-execution-id')).toEqual([0]);
+    expect(await store.filterIds('reqheader:user-agent=chromium or resheader:set-cookie')).toEqual([0, 2]);
     store.close();
   });
 
   it('matches request and response cookies stored in the database', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('reqcookie:sid=xy', 0, 3)).toEqual([0]);
-    expect(await store.filterIds('rescookie:sid', 0, 3)).toEqual([]);
-    expect(await store.filterIds('not reqheader:user-agent=firefox', 0, 3)).toEqual([0, 2]);
+    expect(await store.filterIds('reqcookie:sid=xy')).toEqual([0]);
+    expect(await store.filterIds('rescookie:sid')).toEqual([]);
+    expect(await store.filterIds('not reqheader:user-agent=firefox')).toEqual([0, 2]);
     store.close();
   });
 
-  it('combines field clauses with header clauses and respects the id range', async () => {
+  it('combines field clauses with header clauses', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('method:get and reqheader:user-agent', 0, 3)).toEqual([0, 1]);
-    expect(await store.filterIds('reqheader:user-agent', 1, 3)).toEqual([1]);
+    expect(await store.filterIds('method:get and reqheader:user-agent')).toEqual([0, 1]);
+    expect(await store.filterIds('reqheader:user-agent')).toEqual([0, 1]);
     store.close();
   });
 });
@@ -324,7 +322,7 @@ describe('HarStore upload', () => {
     const name = freshName();
     const store = await upload(name, JSON.stringify(root(items)), 10);
     expect(store.count).toBe(25);
-    expect(await store.filterIds('', 0, 25)).toHaveLength(25);
+    expect(await store.filterIds('')).toHaveLength(25);
     const [last] = await store.getEntries([24]);
     expect(last!.request.url).toBe('https://ex.com/24');
     store.close();
@@ -411,8 +409,8 @@ describe('HarStore upload at scale', () => {
     });
 
     const expectedPosts = Array.from({ length: SCALE_COUNT }, (_, i) => i).filter(i => i % 3 === 1).length;
-    expect(await store.filterIds('method:post', 0, SCALE_COUNT)).toHaveLength(expectedPosts);
-    expect(await store.filterIds('', 0, SCALE_COUNT)).toHaveLength(SCALE_COUNT);
+    expect(await store.filterIds('method:post')).toHaveLength(expectedPosts);
+    expect(await store.filterIds('')).toHaveLength(SCALE_COUNT);
     store.close();
 
     const inspected = await HarStore.inspect(name);
