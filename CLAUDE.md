@@ -287,10 +287,12 @@ Follow these patterns when adding new features:
 ## Architecture Notes
 
 ### Data Flow
-1. On the landing screen, the user imports by dragging a file onto
+1. On the landing screen, the user uploads a file by dragging it onto
    `FileDropZone` or picking one via "Select File…" (`.har`, `.har.gz`/`.gz` or
-   JSON), or opens/deletes an existing DB from `DatabaseList`. Opening a DB
-   shows the table; the rest of the app only performs DB operations.
+   JSON). The file is saved as a DB. In `DatabaseList` the user can open an
+   existing complete DB, edit its comment (`editComment`), reorder it, or delete
+   it (`deleteDatabase`). Opening a DB shows the table; the rest of the app only
+   performs DB operations.
 2. `index.ts` reads and parses the file locally via `utils/fileLoader.ts`
    (`parseJsonFileStreaming`, gunzipping first for `.gz`). The `log.entries`
    items are parsed with native `JSON.parse` one at a time via
@@ -324,6 +326,11 @@ Follow these patterns when adding new features:
    rows (Ctrl/Cmd-click or Shift-click) calls
    `DetailPanel.renderMultiSelect(entries)`, which renders the aggregate
    Timeline/Stats view instead
+6. The view state is persisted in the DB metadata: the request-table filter,
+   custom columns and highlight rules (`DbView`, saved via `HarStore.setView`
+   from `index.ts` `saveView`). They are restored when the DB is opened. The
+   filter result is cached under its own key (`filterCache`) and reused on
+   reopen while the query and row count match
 
 ### State Management
 All HAR entries live in IndexedDB (`utils/harStore.ts`, one database per file
