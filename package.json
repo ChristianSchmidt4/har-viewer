@@ -1,6 +1,6 @@
 {
   "name": "har-viewer",
-  "version": "1.24.0",
+  "version": "1.25.0",
   "description": "A client-side HAR (HTTP Archive) viewer inspired by Fiddler",
   "main": "src/index.ts",
   "scripts": {
@@ -23,6 +23,7 @@
     "@babel/core": "^8.1.0",
     "@babel/preset-env": "^8.0.7",
     "@babel/preset-typescript": "^8.0.7",
+    "@playwright/test": "^1.65.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.6",
     "babel-jest": "^30.5.2",

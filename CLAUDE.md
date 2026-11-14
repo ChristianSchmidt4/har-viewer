@@ -488,9 +488,17 @@ modules for the test run; the app itself ships as native ES modules/TS via
 Vite, untouched by Babel. Run `npm run typecheck` separately (or via
 `npm run build`) for actual type-checking - see [TypeScript](#typescript).
 
+End-to-end tests (`tests/e2e/*.spec.ts`, Playwright + Chromium, config in
+`playwright.config.ts`, run with `npx playwright test`; Vite dev server is
+started automatically on port 3000): `tests/e2e/workflow.spec.ts` drives the
+app through import (name/comment dialog), open, highlight, filter, export,
+custom column, multi-select, reload persistence and delete, plus the
+invalid-file error path. The file is generated in the test; nothing is
+uploaded. Jest ignores `*.spec.ts` files.
+
 Future enhancements could include:
 1. Component/integration tests for `RequestTable` and `DetailPanel`
-2. End-to-end tests with Playwright or Cypress covering drag-and-drop
+2. Drag-and-drop reordering in the end-to-end tests
 
 ## Deployment
 
