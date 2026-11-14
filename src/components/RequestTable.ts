@@ -310,7 +310,6 @@ export class RequestTable {
       if (generation !== this.generation || query !== this.filterInputEl.value) return;
       this.matchIds = result.ids;
       this.visibleCount = result.count;
-      console.log('RequestTable visible row keys:', result.ids ?? `all ${result.count} rows`);
       this.appliedQuery = query;
       this.initialLoad = false;
     } finally {
@@ -375,6 +374,7 @@ export class RequestTable {
     if (store && ids.length > 0) {
       try {
         entries = await store.getEntries(ids);
+        console.debug('RequestTable visible rows from DB:', entries);
       } catch (error) {
         if (token === this.renderToken) console.error('Failed to read rows', error);
         return;
