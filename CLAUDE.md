@@ -496,6 +496,23 @@ custom column, multi-select, reload persistence and delete, plus the
 invalid-file error path. The file is generated in the test; nothing is
 uploaded. Jest ignores `*.spec.ts` files.
 
+The test also saves a screenshot after each step to `docs/screenshots/`
+(`01-start.png` ... `10-invalid-file.png`); these are embedded below and in
+`README.md`'s Screenshots section. Re-run `npx playwright test` to refresh them.
+
+| Step | Screenshot |
+| --- | --- |
+| Start page | ![Start page](docs/screenshots/01-start.png) |
+| Import: name and comment dialog | ![Name and comment dialog](docs/screenshots/02-name-dialog.png) |
+| Stored databases | ![Stored databases](docs/screenshots/03-database-list.png) |
+| Opened database: request table | ![Request table](docs/screenshots/04-request-table.png) |
+| Highlight rule (404 in red) | ![Highlight rule](docs/screenshots/05-highlight.png) |
+| Filter `method:post` | ![Filter](docs/screenshots/06-filter.png) |
+| Custom column `reqheader:content-type` | ![Custom column](docs/screenshots/07-custom-column.png) |
+| Multi-select Timeline | ![Timeline](docs/screenshots/08-timeline.png) |
+| Filter, highlight and column restored after reload | ![Restored view](docs/screenshots/09-restored-view.png) |
+| Invalid file kept as incomplete database | ![Invalid file](docs/screenshots/10-invalid-file.png) |
+
 Future enhancements could include:
 1. Component/integration tests for `RequestTable` and `DetailPanel`
 2. Drag-and-drop reordering in the end-to-end tests

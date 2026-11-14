@@ -405,7 +405,7 @@ describe('HarStore upload at scale', () => {
       expect(row.id).toBe(i);
       expect(row.request.url).toBe(`https://ex.com/${i}`);
       expect(row.request.method).toBe(expected.request.method);
-      expect(row.request.postData?.text.length ?? 0).toBe(expected.request.bodySize);
+      expect(row.request.postData?.text?.length ?? 0).toBe(expected.request.bodySize);
       expect(row.response.content.size).toBe(expected.response.content.size);
       expect(row.response.content.text.length).toBe(expected.response.content.size);
     });

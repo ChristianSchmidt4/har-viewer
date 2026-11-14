@@ -3,10 +3,16 @@
 // Run with `npm run test:e2e`. Nothing is uploaded: the fixture is generated
 // in the test and handed to the file input.
 import { test, expect, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DB_NAME = 'Workflow DB';
 const DB_COMMENT = 'e2e comment';
+
+// Screenshots taken during the run; README.md and CLAUDE.md reference them.
+const SHOT_DIR = resolve(__dirname, '../../docs/screenshots');
+mkdirSync(SHOT_DIR, { recursive: true });
+const shot = (page: Page, file: string) => page.screenshot({ path: resolve(SHOT_DIR, file) });
 
 // A small HAR with GET/POST requests and request/response bodies of varying size.
 const fixtureHar = () => {
@@ -75,6 +81,7 @@ const answerNameDialog = async (page: Page, name: string, comment: string) => {
   const inputs = dialog.locator('input.choice-text-input');
   await inputs.nth(0).fill(name);
   await inputs.nth(1).fill(comment);
+  await shot(page, '02-name-dialog.png');
   await dialog.getByRole('button', { name: 'OK', exact: true }).click();
 };
 
@@ -83,6 +90,8 @@ test.describe('HAR viewer workflow', () => {
     await page.goto('/');
     await expect(page.locator('#drop-screen')).toBeVisible();
 
+    await shot(page, '01-start.png');
+
     // Import: the database appears in the list and the name/comment dialog asks for details.
     const har = Buffer.from(JSON.stringify(fixtureHar()));
     await importFile(page, { name: 'workflow.har', buffer: har });
@@ -90,6 +99,7 @@ test.describe('HAR viewer workflow', () => {
 
     await expect(page.locator('#error-message.visible')).toContainText('finished');
     await expect(dbRow(page, DB_NAME)).toHaveAttribute('data-state', 'complete');
+    await shot(page, '03-database-list.png');
 
     // Open the database: the request table shows all four entries.
     await dbRow(page, DB_NAME).locator('.db-open').click();
@@ -97,16 +107,20 @@ test.describe('HAR viewer workflow', () => {
     await expect(rows(page)).toHaveCount(4);
     await expect(page.locator('#file-info')).toContainText(DB_NAME);
     await expect(page.locator('#file-info')).toContainText('4 requests');
+    await shot(page, '04-request-table.png');
 
     // Highlight rule (Enter adds it): the 404 row gets the red class.
     await page.locator('#highlight-input').fill('status:>=400 => red');
     await page.locator('#highlight-input').press('Enter');
     await expect(page.locator('tr.hl-red')).toHaveCount(1);
+    await shot(page, '05-highlight.png');
 
     // Filter (applied on Enter): only the two POST requests remain.
     await page.locator('#request-filter').fill('method:post');
     await page.locator('#request-filter').press('Enter');
     await expect(rows(page)).toHaveCount(2);
+
+    await shot(page, '06-filter.png');
 
     // Export: downloads only the filtered entries, with the stored comment.
     const [download] = await Promise.all([
@@ -124,6 +138,8 @@ test.describe('HAR viewer workflow', () => {
     await page.locator('#custom-col-input').press('Enter');
     await expect(page.locator('th.col-custom')).toHaveCount(1);
 
+    await shot(page, '07-custom-column.png');
+
     // Clear the filter and select two requests: the aggregate Timeline view appears.
     await page.locator('#request-filter').fill('');
     await page.locator('#request-filter').press('Enter');
@@ -132,6 +148,7 @@ test.describe('HAR viewer workflow', () => {
     await expect(page.locator('#detail-content')).toBeVisible();
     await rows(page).nth(1).locator('td').nth(4).click({ modifiers: ['Control'] });
     await expect(page.locator('#detail-panel')).toContainText('Timeline');
+    await shot(page, '08-timeline.png');
 
     // Persisted view: the filter is saved and restored after a reload.
     await page.locator('#request-filter').fill('method:post');
@@ -144,6 +161,8 @@ test.describe('HAR viewer workflow', () => {
     await expect(page.locator('#request-filter')).toHaveValue('method:post');
     await expect(page.locator('#highlight-rules')).toContainText('status:>=400');
     await expect(page.locator('th.col-custom')).toHaveCount(1);
+
+    await shot(page, '09-restored-view.png');
 
     // Back to the start page and delete the database.
     await page.locator('#load-new-btn').click();
@@ -162,6 +181,6 @@ test.describe('HAR viewer workflow', () => {
     await expect(page.locator('#error-message.visible')).toContainText('failed');
     await expect(dbRow(page, 'broken.har')).toHaveAttribute('data-state', 'incomplete');
     await expect(dbRow(page, 'broken.har').locator('.db-open')).toBeDisabled();
+    await shot(page, '10-invalid-file.png');
   });
 });
-
