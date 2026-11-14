@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "node .github/hooks/ui-screenshots.mjs",
+        "timeoutSec": 240
+      }
+    ]
+  }
+}

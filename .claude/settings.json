@@ -44,6 +44,17 @@
           "command": "echo 'Build completed'"
         }
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.github/hooks/ui-screenshots.mjs\"",
+            "timeout": 240
+          }
+        ]
+      }
     ]
   },
   "permissions": {

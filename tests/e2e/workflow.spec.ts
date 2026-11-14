@@ -3,16 +3,51 @@
 // Run with `npm run test:e2e`. Nothing is uploaded: the fixture is generated
 // in the test and handed to the file input.
 import { test, expect, type Page } from '@playwright/test';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PNG } from 'pngjs';
+import pixelmatch from 'pixelmatch';
 
 const DB_NAME = 'Workflow DB';
 const DB_COMMENT = 'e2e comment';
 
+// Fixed clock, so the file/last-used times in the screenshots do not change per run.
+const FIXED_NOW = new Date('2024-06-01T12:00:00.000Z');
+// Dummy app version shown in screenshots, so a version bump does not change the PNGs.
+const DUMMY_VERSION = 'v0.0.0-test';
+
 // Screenshots taken during the run; README.md and CLAUDE.md reference them.
 const SHOT_DIR = resolve(__dirname, '../../docs/screenshots');
 mkdirSync(SHOT_DIR, { recursive: true });
-const shot = (page: Page, file: string) => page.screenshot({ path: resolve(SHOT_DIR, file) });
+
+// Pixel comparison with tolerance: rendering noise (anti-aliasing, 1-2 px jitter) is ignored.
+// A new image is only written when more than MAX_DIFF_RATIO of the pixels differ.
+const PIXEL_THRESHOLD = 0.1; // per-pixel colour distance (pixelmatch, 0..1)
+const MAX_DIFF_RATIO = 0.005; // up to 0.5 % of the pixels may differ
+
+const sameImage = (existing: Buffer, next: Buffer): boolean => {
+  const a = PNG.sync.read(existing);
+  const b = PNG.sync.read(next);
+  if (a.width !== b.width || a.height !== b.height) return false;
+  const differing = pixelmatch(a.data, b.data, undefined, a.width, a.height, { threshold: PIXEL_THRESHOLD });
+  return differing / (a.width * a.height) <= MAX_DIFF_RATIO;
+};
+
+// Saves a screenshot only if it differs visibly from the existing file, so unchanged
+// screens leave docs/screenshots untouched.
+const shot = async (page: Page, file: string) => {
+  // The filter/loading spinner rotates forever; wait until it is hidden so it never lands in a PNG.
+  await expect(page.locator('#filter-busy')).toBeHidden();
+  await page.evaluate((version) => {
+    const el = document.getElementById('app-version');
+    if (el) el.textContent = version;
+  }, DUMMY_VERSION);
+  const path = resolve(SHOT_DIR, file);
+  // Finish CSS animations and hide the blinking text caret so every run captures the same frame.
+  const png = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+  if (existsSync(path) && sameImage(readFileSync(path), png)) return;
+  writeFileSync(path, png);
+};
 
 // A small HAR with GET/POST requests and request/response bodies of varying size.
 const fixtureHar = () => {
@@ -71,8 +106,19 @@ const rows = (page: Page) => page.locator('#requests-table-body tr[data-entry-id
 const dbRow = (page: Page, name: string) => page.locator('li.db-row', { hasText: name });
 
 // Dropping a file runs the import; the name/comment dialog appears once it is read.
+// The file is built in the page with a fixed lastModified: Playwright would stamp the real time,
+// which the app shows as the import time in the database list.
 const importFile = async (page: Page, file: { name: string; buffer: Buffer }) => {
-  await page.locator('#har-file-input').setInputFiles({ name: file.name, mimeType: 'application/json', buffer: file.buffer });
+  await page.evaluate(
+    ({ name, bytes, lastModified }) => {
+      const input = document.getElementById('har-file-input') as HTMLInputElement;
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(bytes)], name, { type: 'application/json', lastModified }));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+    { name: file.name, bytes: [...file.buffer], lastModified: FIXED_NOW.getTime() },
+  );
 };
 
 const answerNameDialog = async (page: Page, name: string, comment: string) => {
@@ -87,6 +133,7 @@ const answerNameDialog = async (page: Page, name: string, comment: string) => {
 
 test.describe('HAR viewer workflow', () => {
   test('import, inspect, filter, highlight, export, reload and delete a database', async ({ page }) => {
+    await page.clock.setFixedTime(FIXED_NOW);
     await page.goto('/');
     await expect(page.locator('#drop-screen')).toBeVisible();
 
@@ -175,6 +222,7 @@ test.describe('HAR viewer workflow', () => {
   });
 
   test('reports a file that is not valid JSON and keeps it as an incomplete database', async ({ page }) => {
+    await page.clock.setFixedTime(FIXED_NOW);
     await page.goto('/');
     await importFile(page, { name: 'broken.har', buffer: Buffer.from('this is not json') });
 

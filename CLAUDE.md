@@ -25,6 +25,14 @@ section yet, it prompts the agent to update `CHANGELOG.md`, `README.md` and
 `CLAUDE.md`. Bumps made outside the agent's edit tools (e.g. `npm version minor`)
 do not trigger it.
 
+An end-of-task hook (`.github/hooks/ui-screenshots.mjs`; Claude Code `Stop` in
+`.claude/settings.json`, Copilot CLI `sessionEnd` in `.github/hooks/ui-screenshots.json`)
+runs once the task ends. If `src/**` or `index.html` has uncommitted changes, it runs the
+Playwright workflow test (`npx playwright test tests/e2e`), which regenerates
+`docs/screenshots/*.png`. If any image changed, or the test failed, Claude Code is
+asked to review the images and update the Screenshots section of `README.md` and the
+screenshot table in this file. It stays silent when nothing changed.
+
 ## Project Overview
 
 This is a client-side HTTP Archive (HAR) viewer inspired by Fiddler. A user
