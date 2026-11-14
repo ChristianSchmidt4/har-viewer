@@ -306,19 +306,19 @@ describe('HarStore view state', () => {
   });
 });
 
-describe('HarStore upload', () => {
-  // Mirrors index.ts runImport: stream the File in batches into the store, then finish.
-  const upload = async (name: string, json: string, batchSize: number) => {
-    const store = await HarStore.create(name, 'upload.har', json.length, 42);
-    const file = new File([json], 'upload.har');
-    const { value, uncompressedSize } = await parseJsonFileStreaming(file, false, () => {}, {
-      batchSize,
-      onBatch: items => store.writeBatch(items as HarEntryRaw[]),
-    });
-    await store.finish(value as Record<string, unknown>, uncompressedSize);
-    return store;
-  };
+// Mirrors index.ts runImport: stream the File in batches into the store, then finish.
+const upload = async (name: string, json: string, batchSize: number) => {
+  const store = await HarStore.create(name, 'upload.har', json.length, 42);
+  const file = new File([json], 'upload.har');
+  const { value, uncompressedSize } = await parseJsonFileStreaming(file, false, () => {}, {
+    batchSize,
+    onBatch: items => store.writeBatch(items as HarEntryRaw[]),
+  });
+  await store.finish(value as Record<string, unknown>, uncompressedSize);
+  return store;
+};
 
+describe('HarStore upload', () => {
   it('stores every entry in batches and marks the copy complete', async () => {
     const items = Array.from({ length: 25 }, (_, i) => entry(`2023-01-01T12:00:${String(i % 60).padStart(2, '0')}.000Z`, i, 'GET', `https://ex.com/${i}`, 200));
     const name = freshName();
@@ -353,6 +353,74 @@ describe('HarStore upload', () => {
     store.close();
   });
 });
+describe('HarStore upload at scale', () => {
+  const SCALE_COUNT = 100_000;
+  const METHODS = ['GET', 'POST', 'PUT'] as const;
+  const STATUSES = [200, 201, 404, 500] as const;
+  const MIMES = ['text/html', 'application/json', 'text/plain', 'image/png'] as const;
+
+  // Deterministic body length: mostly small, with ~1% large (8-16 KB) bodies.
+  const bodyLength = (i: number, salt: number) =>
+    (i * salt) % 100 === 0 ? 8192 + ((i * 13 + salt) % 8192) : (i * 31 + salt) % 600;
+
+  const scaleEntry = (i: number) => {
+    const method = METHODS[i % METHODS.length]!;
+    const reqLen = method === 'GET' ? 0 : bodyLength(i, 3);
+    const respLen = bodyLength(i, 7);
+    return {
+      startedDateTime: new Date(Date.UTC(2023, 0, 1, 12) + i * 1000).toISOString(),
+      time: (i * 17) % 500,
+      request: {
+        method,
+        url: `https://ex.com/${i}`,
+        httpVersion: 'HTTP/1.1',
+        headers: [],
+        bodySize: reqLen,
+        ...(reqLen > 0 ? { postData: { mimeType: 'application/json', text: 'p'.repeat(reqLen) } } : {}),
+      },
+      response: {
+        status: STATUSES[i % STATUSES.length],
+        statusText: '',
+        httpVersion: 'HTTP/1.1',
+        headers: [],
+        bodySize: respLen,
+        content: { size: respLen, mimeType: MIMES[i % MIMES.length], text: 'r'.repeat(respLen) },
+      },
+    };
+  };
+
+  it('imports 100k entries of varying size in batches and reads them back', async () => {
+    const items = Array.from({ length: SCALE_COUNT }, (_, i) => scaleEntry(i));
+    const name = freshName();
+    const json = JSON.stringify(root(items));
+
+    const store = await upload(name, json, 1000);
+    expect(store.count).toBe(SCALE_COUNT);
+
+    const sampleIds = [0, 1, 49, 50, 99_998, 99_999];
+    const rows = await store.getEntries(sampleIds);
+    sampleIds.forEach((i, k) => {
+      const expected = scaleEntry(i);
+      const row = rows[k]!;
+      expect(row.id).toBe(i);
+      expect(row.request.url).toBe(`https://ex.com/${i}`);
+      expect(row.request.method).toBe(expected.request.method);
+      expect(row.request.postData?.text.length ?? 0).toBe(expected.request.bodySize);
+      expect(row.response.content.size).toBe(expected.response.content.size);
+      expect(row.response.content.text.length).toBe(expected.response.content.size);
+    });
+
+    const expectedPosts = Array.from({ length: SCALE_COUNT }, (_, i) => i).filter(i => i % 3 === 1).length;
+    expect(await store.filterIds('method:post', 0, SCALE_COUNT)).toHaveLength(expectedPosts);
+    expect(await store.filterIds('', 0, SCALE_COUNT)).toHaveLength(SCALE_COUNT);
+    store.close();
+
+    const inspected = await HarStore.inspect(name);
+    expect(inspected?.complete).toBe(true);
+    expect(inspected?.count).toBe(SCALE_COUNT);
+  }, 300_000);
+});
+
 describe('HarStore last used', () => {
   it('sets the last-used time on import and updates it when the database is opened', async () => {
     const name = freshName();

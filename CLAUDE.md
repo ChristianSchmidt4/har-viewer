@@ -480,7 +480,7 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
 - `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
 - `tests/dbOrder.test.ts` - DB order persistence, `applyDbOrder`, `moveName`
-- `tests/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), export incl. comment (Node env with `fake-indexeddb`)
+- `tests/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), a 100k-entry upload scale test (GET/POST/PUT with varying body sizes), export incl. comment (Node env with `fake-indexeddb`)
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES
