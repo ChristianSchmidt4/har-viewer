@@ -20,9 +20,11 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   database name and a comment (pre-filled with the file name and the HAR's
   `log.comment` when present)
 - Requests are stored in IndexedDB, so large archives do not have to fit in memory;
-  filtering runs against the database, and only the visible rows are read;
-  the filter is applied on Enter or when the input loses focus, and its result
-  is cached in the database so reopening with the same query is instant
+  filtering runs against the database, and only the visible rows are read
+  (without a filter the row count comes from the database metadata, so no row
+  keys are loaded up front); the filter is applied on Enter or when the input
+  loses focus, and its result is cached in the database so reopening with the
+  same query is instant
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
 - Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
@@ -103,7 +105,7 @@ har_viewer/
 │   ├── types/
 │   │   └── har.ts            # Shared HAR raw/parsed type definitions
 │   ├── utils/
-│   │   ├── harStore.ts       # Per-file IndexedDB store (import, filter IDs, export)
+│   │   ├── harStore.ts       # Per-file IndexedDB store (import, filter results, export)
 │   │   ├── dbOrder.ts        # Start-page order of stored databases
 │   │   ├── jsonArraySplitter.ts # Per-item parsing of the log.entries array
 │   │   ├── harParser.ts      # HAR JSON -> structured entries

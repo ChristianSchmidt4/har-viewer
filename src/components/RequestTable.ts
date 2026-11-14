@@ -62,8 +62,10 @@ export class RequestTable {
   private harParser: HarParser;
   // Entries live in the store; only their indices are kept here.
   private store: HarStore | null;
-  // Indices passing the applied filter, ascending.
-  private visibleIds: number[];
+  // Indices passing the applied filter, ascending; null when no filter applies
+  // (then every row 0..visibleCount-1 is shown and no index list is kept).
+  private matchIds: number[] | null;
+  private visibleCount: number;
   // Filter query the visibleIds were computed for; null means not yet filtered.
   private appliedQuery: string | null;
   // Bumped when the store is replaced so stale async work is discarded.
@@ -104,7 +106,8 @@ export class RequestTable {
     this.harParser = new HarParser();
 
     this.store = null;
-    this.visibleIds = [];
+    this.matchIds = null;
+    this.visibleCount = 0;
     this.appliedQuery = null;
     this.generation = 0;
     this.syncChain = Promise.resolve();
@@ -215,7 +218,8 @@ export class RequestTable {
     this.selectionToken++;
     this.store = store;
     this.initialLoad = store !== null;
-    this.visibleIds = [];
+    this.matchIds = null;
+    this.visibleCount = 0;
     this.appliedQuery = null;
     this.selectedEntryIds.clear();
     this.lastSelectedEntryId = null;
@@ -255,7 +259,7 @@ export class RequestTable {
   // Selects only the given entry (as a click would), scrolling it into view
   // when it is part of the currently filtered list.
   selectSingleEntry(entryId: number): void {
-    const index = this.visibleIds.indexOf(entryId);
+    const index = this.positionOf(entryId);
     if (index !== -1) {
       const rowTop = index * this.rowHeight;
       const viewBottom = this.scrollEl.scrollTop + this.scrollEl.clientHeight;
@@ -268,7 +272,21 @@ export class RequestTable {
 
   // Indices (HAR entry ids) of the entries currently passing the filter.
   getVisibleIds(): number[] {
-    return this.visibleIds;
+    return this.idsInRange(0, this.visibleCount);
+  }
+
+  // HAR entry ids of the filtered rows in [start, end), in list order.
+  private idsInRange(start: number, end: number): number[] {
+    if (this.matchIds) return this.matchIds.slice(start, end);
+    const ids: number[] = [];
+    for (let i = start; i < end; i++) ids.push(i);
+    return ids;
+  }
+
+  // Position of an entry in the filtered list, or -1 when it is filtered out.
+  private positionOf(entryId: number): number {
+    if (this.matchIds) return this.matchIds.indexOf(entryId);
+    return entryId >= 0 && entryId < this.visibleCount ? entryId : -1;
   }
 
   private async syncFilter(): Promise<void> {
@@ -282,14 +300,17 @@ export class RequestTable {
       return;
     }
 
-    this.visibleIds = [];
+    this.matchIds = null;
+    this.visibleCount = 0;
     this.appliedQuery = null;
     this.filterBusyLabelEl.textContent = this.initialLoad ? 'Loading requests…' : 'Filtering…';
     this.filterBusyEl.hidden = false;
     try {
-      const ids = await store.filterIds(query);
+      const result = await store.filterResult(query);
       if (generation !== this.generation || query !== this.filterInputEl.value) return;
-      this.visibleIds = ids;
+      this.matchIds = result.ids;
+      this.visibleCount = result.count;
+      console.log('RequestTable visible row keys:', result.ids ?? `all ${result.count} rows`);
       this.appliedQuery = query;
       this.initialLoad = false;
     } finally {
@@ -332,7 +353,7 @@ export class RequestTable {
   // below with spacer rows that keep the scrollbar at the full list height.
   // Row data is read from the store for just the rows being rendered.
   private async renderWindow(): Promise<void> {
-    const total = this.visibleIds.length;
+    const total = this.visibleCount;
     const range = computeWindowRange(
       this.scrollEl.scrollTop,
       this.scrollEl.clientHeight,
@@ -349,7 +370,7 @@ export class RequestTable {
 
     const token = ++this.renderToken;
     const store = this.store;
-    const ids = this.visibleIds.slice(range.start, range.end);
+    const ids = this.idsInRange(range.start, range.end);
     let entries: ParsedEntry[] = [];
     if (store && ids.length > 0) {
       try {
@@ -474,15 +495,15 @@ export class RequestTable {
 
   private selectRange(entryId: number): void {
     const anchorId = this.lastSelectedEntryId ?? entryId;
-    const anchorIndex = this.visibleIds.indexOf(anchorId);
-    const targetIndex = this.visibleIds.indexOf(entryId);
+    const anchorIndex = this.positionOf(anchorId);
+    const targetIndex = this.positionOf(entryId);
     if (anchorIndex === -1 || targetIndex === -1) {
       this.selectEntry(entryId);
       return;
     }
 
     const [start, end] = anchorIndex <= targetIndex ? [anchorIndex, targetIndex] : [targetIndex, anchorIndex];
-    this.selectedEntryIds = new Set(this.visibleIds.slice(start, end + 1));
+    this.selectedEntryIds = new Set(this.idsInRange(start, end + 1));
     this.syncRowSelectionClasses();
     this.notifySelection();
   }
@@ -518,7 +539,7 @@ export class RequestTable {
 
   private updateResultCount(): void {
     const total = this.store?.count ?? 0;
-    const visible = this.visibleIds.length;
+    const visible = this.visibleCount;
     this.resultCountEl.textContent = visible === total
       ? `${total} requests`
       : `${visible} / ${total} requests`;

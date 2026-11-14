@@ -37,8 +37,9 @@ export function emptyDbView(): DbView {
   return { filter: '', customColumns: [], highlightRules: [] };
 }
 
-// Indices matching the filter query of a complete database, kept so reopening
-// the database does not have to scan every row again.
+// Filter query of the request table, plus the indices matching it once a full
+// pass over a complete database has been made (so reopening does not rescan).
+// ids is absent until that pass happened.
 export interface FilterCache {
   query: string;
   count?: number;
@@ -50,7 +51,14 @@ function isValidFilterCache(value: unknown): value is FilterCache {
   const record = value as Partial<FilterCache> & Record<string, unknown>;
   if (typeof record.query !== 'string' || record.query.trim() === '') return false;
   if (record.count !== undefined && typeof record.count !== 'number') return false;
-  return Array.isArray(record.ids);
+  return record.ids === undefined || Array.isArray(record.ids);
+}
+
+// Rows passing a filter. ids is null when no filter applies: every row
+// 0..count-1 then matches and the indices are not loaded.
+export interface FilterResult {
+  count: number;
+  ids: number[] | null;
 }
 
 function getFilterCacheValue(store: IDBObjectStore): Promise<FilterCache | null> {
@@ -301,11 +309,10 @@ export class HarStore {
       this.filterCache = null;
       metaStore.delete(FILTER_CACHE_KEY);
     } else {
-      this.filterCache = {
-        query: view.filter,
-        count: this.count,
-        ids: this.filterCache?.query === view.filter && Array.isArray(this.filterCache.ids) ? this.filterCache.ids : []
-      };
+      // Keeps the ids of a matching cache; otherwise only the query is stored,
+      // so the next filter pass scans instead of reusing a placeholder.
+      const kept = this.filterCache?.query === view.filter ? this.filterCache : null;
+      this.filterCache = kept ?? { query: view.filter, count: this.count };
       metaStore.put(this.filterCache, FILTER_CACHE_KEY);
     }
     metaStore.put(view.customColumns, CUSTOM_COLUMNS_KEY);
@@ -385,20 +392,28 @@ export class HarStore {
     return entries;
   }
 
-  // Indices whose entry matches the filter query, ascending. A full pass over
-  // a complete database is cached in its metadata for reuse when it is opened.
+  // Indices whose entry matches the filter query, ascending (every row when the
+  // query is empty). Use filterResult to avoid materializing the indices.
   async filterIds(query: string): Promise<number[]> {
+    const result = await this.filterResult(query);
+    return result.ids ?? Array.from({ length: result.count }, (_, i) => i);
+  }
+
+  // Number of rows passing the filter and, for a non-empty query, their indices.
+  // An empty query needs no key list: the count comes from meta.
+  // A full pass over a complete database is cached for reuse when it is opened.
+  async filterResult(query: string): Promise<FilterResult> {
     const count = this.count;
-    if (count === 0) return [];
     if (!query.trim()) {
       this.filterCache = null;
-      return this.allKeys();
+      return { count, ids: null };
     }
+    if (count === 0) return { count: 0, ids: [] };
 
     const cacheable = this.complete;
     const cache = this.filterCache;
-    if (cacheable && cache && cache.query === query && cache.count === count) {
-      return Array.isArray(cache.ids) ? cache.ids : [];
+    if (cacheable && cache && cache.query === query && cache.count === count && Array.isArray(cache.ids)) {
+      return { count: cache.ids.length, ids: cache.ids };
     }
 
     const matches = compileFilterQuery(query);
@@ -418,7 +433,7 @@ export class HarStore {
       // A failed write only costs a rescan on the next open.
       this.saveFilterCache().catch(error => console.error('Could not cache the filter result', error));
     }
-    return ids;
+    return { count: ids.length, ids };
   }
 
   // Writes the in-memory filter cache under its own key of the META store.
@@ -493,12 +508,6 @@ export class HarStore {
     });
     await transactionDone(tx);
     return values;
-  }
-
-  private async allKeys(): Promise<number[]> {
-    const tx = this.db.transaction(ROWS, 'readonly');
-    const keys = await request(tx.objectStore(ROWS).getAllKeys());
-    return keys as number[];
   }
 
   private toParsed(row: StoredRow, id: number): ParsedEntry {

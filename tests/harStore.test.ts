@@ -289,7 +289,6 @@ describe('HarStore view state', () => {
     const again = await HarStore.open(name);
     expect(again.view).toEqual(view);
     again.close();
-    expect((await HarStore.inspect(name))?.view).toEqual(view);
   });
 
   it('keeps a comment changed through another connection when the view is saved', async () => {
@@ -300,7 +299,9 @@ describe('HarStore view state', () => {
     store.close();
     const listed = (await HarStore.list()).find(d => d.name === name);
     expect(listed).toMatchObject({ comment: 'changed elsewhere' });
-    expect((await HarStore.inspect(name))?.view?.filter).toBe('method:get');
+    const reopened = await HarStore.open(name);
+    expect(reopened.view.filter).toBe('method:get');
+    reopened.close();
   });
 });
 

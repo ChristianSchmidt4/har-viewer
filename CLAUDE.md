@@ -157,9 +157,11 @@ is needed for development. See [TypeScript](#typescript) below.
    and Shift-click selects the range from the last-touched row; 0 or 1
    selected rows fire `onSelect`/an empty `onMultiSelect([])`, 2+ fire
    `onMultiSelect(entries)`. Rows live in the IndexedDB store (`HarStore`):
-   the table keeps only the list of matching indices (`visibleIds`), filters
-   via `HarStore.filterIds`, and reads the rows it displays with
-   `HarStore.getEntries`. `setStore(store)` attaches a complete database,
+   the table keeps only the matching indices (`matchIds`) and their count
+   (`visibleCount`). With no filter `matchIds` is `null` and the rows are
+   `0..count-1` (count from `meta.count`), so no key list is read. Filters go
+   through `HarStore.filterResult`, and only the rows of the visible window are
+   read with `HarStore.getEntries`. `setStore(store)` attaches a complete database,
    `setFilter(query)` applies its filter, `getVisibleIds()` gives the current
    filter result (used by export), and `selectSingleEntry(id)` lets the detail
    panel's timeline select one row programmatically.
@@ -233,9 +235,13 @@ is needed for development. See [TypeScript](#typescript) below.
    (used by the app only for complete DBs), `create(name, fileName, fileSize, fileModified)` (replaces
    an existing DB of that name), `HarStore.updateComment(name, comment)` (for DBs not
    being imported) and the instance `setComment(comment)` (for running imports, so
-   batch writes keep the comment), `markUsed()` (sets the last-used time; `create` sets it on import, and the app calls it when a database is opened), `setView(view)` (filter, custom columns and highlight rules, stored as `DbView` in the metadata), `deleteDatabase`, `writeBatch` (rows and count
-   in one transaction), `finish`, `getEntries(ids)`, `filterIds(query)`
-   (uses `compileFilterQuery`; a full pass over a complete DB is cached under its own `filterCache` key in the META store, so reopening with the same filter reuses the saved indices instead of scanning rows), and `exportBlob(ids)`.
+   batch writes keep the comment), `markUsed()` (sets the last-used time; `create` sets it on import, and the app calls it when a database is opened), `setView(view)` (filter, custom columns and highlight rules; see step 6 for the META keys), `deleteDatabase`, `writeBatch` (rows and count
+   in one transaction), `finish`, `getEntries(ids)`, `filterResult(query)`
+   returning `{ count, ids }` (uses `compileFilterQuery`; an empty query gives `ids: null`
+   without reading any key, so the count comes from `meta.count`; a non-empty query scans
+   the rows, and a full pass over a complete DB is cached under the `filterCache` key so
+   reopening with the same filter reuses the saved indices), `filterIds(query)` (same,
+   returning the full array), and `exportBlob(ids)`.
 11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
    text fields in one dialog, e.g. name + comment on import) show a modal `<dialog>` and resolve to
@@ -334,11 +340,14 @@ Follow these patterns when adding new features:
    rows (Ctrl/Cmd-click or Shift-click) calls
    `DetailPanel.renderMultiSelect(entries)`, which renders the aggregate
    Timeline/Stats view instead
-6. The view state is persisted in the DB metadata: the request-table filter,
-   custom columns and highlight rules (`DbView`, saved via `HarStore.setView`
-   from `index.ts` `saveView`). They are restored when the DB is opened. The
-   filter result is cached under its own key (`filterCache`) and reused on
-   reopen while the query and row count match
+6. The view state is persisted in the DB's META store, one key per item:
+   `meta` (`HarMeta`, including `count`), `customColumns`, `highlightRules`, and
+   `filterCache` (`{ query, count, ids? }`). The filter query lives in
+   `filterCache`; `ids` is added once a full scan has run. No filter means no
+   `filterCache` row. `HarStore.setView` (called from `index.ts` `saveView`) writes
+   them and `HarStore.open` restores them (a legacy `meta.view` is still read when
+   the new keys are missing). Cached indices are reused on reopen while the query
+   and `count` match.
 
 ### State Management
 All HAR entries live in IndexedDB (`utils/harStore.ts`, one database per file
