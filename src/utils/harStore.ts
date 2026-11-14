@@ -21,6 +21,8 @@ const HIGHLIGHT_RULES_KEY = 'highlightRules';
 const FILTER_CACHE_KEY = 'filterCache';
 // Number of rows read per transaction while exporting.
 const EXPORT_CHUNK_SIZE = 500;
+// Rows read and written per transaction when copying into a new database.
+const COPY_BATCH_SIZE = 100_000;
 
 export type StoredRow = HarEntryRaw | InvalidItem;
 
@@ -469,6 +471,20 @@ export class HarStore {
     }
     parts.push(']', tail);
     return new Blob(parts, { type: 'application/json' });
+  }
+
+  // Copies the rows at the given indices (in order) into the target store,
+  // which must be a fresh store from create(). The target keeps this store's
+  // comment and document, and gets the given view state.
+  async copyRowsTo(target: HarStore, ids: number[], view: DbView, onProgress?: (fraction: number) => void): Promise<void> {
+    for (let i = 0; i < ids.length; i += COPY_BATCH_SIZE) {
+      const values = await this.readValues(ids.slice(i, i + COPY_BATCH_SIZE));
+      await target.writeBatch(values.filter((value): value is StoredRow => value !== undefined));
+      onProgress?.(Math.min(1, (i + COPY_BATCH_SIZE) / ids.length));
+    }
+    target.comment = this.comment;
+    await target.finish(this.root, this.uncompressedSize);
+    await target.setView(view);
   }
 
   close(): void {

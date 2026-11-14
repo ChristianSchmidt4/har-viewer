@@ -223,6 +223,28 @@ describe('HarStore', () => {
     expect(JSON.parse(await (await store.exportBlob([])).text()).log).not.toHaveProperty('comment');
     store.close();
   });
+
+  it('copies the given rows into a new complete store with the view state, keeping the comment', async () => {
+    const items = [ENTRIES[0], { invalid: true, reason: 'bad', raw: '{' }, ENTRIES[1], ENTRIES[2]];
+    const source = await load(freshName(), items);
+    await source.setComment('source comment');
+    const view = { filter: '', customColumns: [], highlightRules: ['status:404 => red'] };
+    const targetName = freshName();
+    const target = await HarStore.create(targetName, 'file.har - filter: method:get', 1234, 2000);
+    const progress: number[] = [];
+    await source.copyRowsTo(target, [0, 2, 3], view, (fraction) => progress.push(fraction));
+    expect(target.complete).toBe(true);
+    expect(target.count).toBe(3);
+    expect(target.comment).toBe('source comment');
+    expect(target.view).toEqual(view);
+    expect(progress.at(-1)).toBe(1);
+    const reopened = await HarStore.open(targetName);
+    expect(reopened.fileName).toBe('file.har - filter: method:get');
+    expect(JSON.parse(await (await reopened.exportBlob([0, 1, 2])).text()).log.entries).toEqual([ENTRIES[0], ENTRIES[1], ENTRIES[2]]);
+    expect(reopened.view.highlightRules).toEqual(['status:404 => red']);
+    reopened.close();
+    source.close();
+  });
 });
 
 describe('HarStore filtering on sub-attributes', () => {
