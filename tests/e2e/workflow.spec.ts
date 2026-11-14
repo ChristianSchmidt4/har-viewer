@@ -29,7 +29,7 @@ const sameImage = (existing: Buffer, next: Buffer): boolean => {
   const a = PNG.sync.read(existing);
   const b = PNG.sync.read(next);
   if (a.width !== b.width || a.height !== b.height) return false;
-  const differing = pixelmatch(a.data, b.data, undefined, a.width, a.height, { threshold: PIXEL_THRESHOLD });
+  const differing = pixelmatch(a.data, b.data, null, a.width, a.height, { threshold: PIXEL_THRESHOLD });
   return differing / (a.width * a.height) <= MAX_DIFF_RATIO;
 };
 
@@ -232,3 +232,4 @@ test.describe('HAR viewer workflow', () => {
     await shot(page, '10-invalid-file.png');
   });
 });
+
