@@ -392,13 +392,6 @@ export class HarStore {
     return entries;
   }
 
-  // Indices whose entry matches the filter query, ascending (every row when the
-  // query is empty). Use filterResult to avoid materializing the indices.
-  async filterIds(query: string): Promise<number[]> {
-    const result = await this.filterResult(query);
-    return result.ids ?? Array.from({ length: result.count }, (_, i) => i);
-  }
-
   // Number of rows passing the filter and, for a non-empty query, their indices.
   // An empty query needs no key list: the count comes from meta.
   // A full pass over a complete database is cached for reuse when it is opened.

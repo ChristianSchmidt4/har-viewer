@@ -16,6 +16,12 @@ const entry = (startedDateTime: string, time: number, method: string, url: strin
     response: { status, statusText: '', httpVersion: 'HTTP/1.1', headers: [], content: { mimeType: 'text/html' } },
   }) as unknown as HarEntryRaw;
 
+// Matching row indices for a query (every row when the query is empty).
+const filterIds = async (store: HarStore, query: string): Promise<number[]> => {
+  const { count, ids } = await store.filterResult(query);
+  return ids ?? Array.from({ length: count }, (_, i) => i);
+};
+
 const ENTRIES: HarEntryRaw[] = [
   entry('2023-01-01T12:00:00.000Z', 150, 'GET', 'https://example.com/a', 200),
   entry('2023-01-01T12:00:01.000Z', 80, 'POST', 'https://api.example.org/b', 500),
@@ -173,9 +179,9 @@ describe('HarStore', () => {
 
   it('filters ids by query across the database', async () => {
     const store = await load(freshName(), ENTRIES);
-    expect(await store.filterIds('')).toEqual([0, 1, 2]);
-    expect(await store.filterIds('status:200')).toEqual([0]);
-    expect(await store.filterIds('method:get')).toEqual([0, 2]);
+    expect(await filterIds(store, '')).toEqual([0, 1, 2]);
+    expect(await filterIds(store, 'status:200')).toEqual([0]);
+    expect(await filterIds(store, 'method:get')).toEqual([0, 2]);
     store.close();
   });
 
@@ -184,7 +190,7 @@ describe('HarStore', () => {
     (await load(name, ENTRIES)).close();
 
     const store = await HarStore.open(name);
-    expect(await store.filterIds('method:get')).toEqual([0, 2]);
+    expect(await filterIds(store, 'method:get')).toEqual([0, 2]);
     store.close();
     expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'method:get', count: 3, ids: [0, 2] });
     expect(await readMetaKey(name, 'meta')).not.toHaveProperty('filterCache');
@@ -192,8 +198,8 @@ describe('HarStore', () => {
     // Replace the cached ids to show a reopened store answers from the cache.
     await writeMetaKey(name, 'filterCache', { query: 'method:get', count: 3, ids: [9] });
     const reopened = await HarStore.open(name);
-    expect(await reopened.filterIds('method:get')).toEqual([9]);
-    expect(await reopened.filterIds('status:404')).toEqual([2]);
+    expect(await filterIds(reopened, 'method:get')).toEqual([9]);
+    expect(await filterIds(reopened, 'status:404')).toEqual([2]);
     reopened.close();
     expect(await readMetaKey(name, 'filterCache')).toEqual({ query: 'status:404', count: 3, ids: [2] });
   });
@@ -236,25 +242,25 @@ describe('HarStore filtering on sub-attributes', () => {
 
   it('matches request and response headers stored in the database', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('reqheader:user-agent=chromium')).toEqual([0]);
-    expect(await store.filterIds('reqheader:user-agent')).toEqual([0, 1]);
-    expect(await store.filterIds('resheader:x-execution-id')).toEqual([0]);
-    expect(await store.filterIds('reqheader:user-agent=chromium or resheader:set-cookie')).toEqual([0, 2]);
+    expect(await filterIds(store, 'reqheader:user-agent=chromium')).toEqual([0]);
+    expect(await filterIds(store, 'reqheader:user-agent')).toEqual([0, 1]);
+    expect(await filterIds(store, 'resheader:x-execution-id')).toEqual([0]);
+    expect(await filterIds(store, 'reqheader:user-agent=chromium or resheader:set-cookie')).toEqual([0, 2]);
     store.close();
   });
 
   it('matches request and response cookies stored in the database', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('reqcookie:sid=xy')).toEqual([0]);
-    expect(await store.filterIds('rescookie:sid')).toEqual([]);
-    expect(await store.filterIds('not reqheader:user-agent=firefox')).toEqual([0, 2]);
+    expect(await filterIds(store, 'reqcookie:sid=xy')).toEqual([0]);
+    expect(await filterIds(store, 'rescookie:sid')).toEqual([]);
+    expect(await filterIds(store, 'not reqheader:user-agent=firefox')).toEqual([0, 2]);
     store.close();
   });
 
   it('combines field clauses with header clauses', async () => {
     const store = await load(freshName(), HEADER_ITEMS);
-    expect(await store.filterIds('method:get and reqheader:user-agent')).toEqual([0, 1]);
-    expect(await store.filterIds('reqheader:user-agent')).toEqual([0, 1]);
+    expect(await filterIds(store, 'method:get and reqheader:user-agent')).toEqual([0, 1]);
+    expect(await filterIds(store, 'reqheader:user-agent')).toEqual([0, 1]);
     store.close();
   });
 });
@@ -323,7 +329,7 @@ describe('HarStore upload', () => {
     const name = freshName();
     const store = await upload(name, JSON.stringify(root(items)), 10);
     expect(store.count).toBe(25);
-    expect(await store.filterIds('')).toHaveLength(25);
+    expect(await filterIds(store, '')).toHaveLength(25);
     const [last] = await store.getEntries([24]);
     expect(last!.request.url).toBe('https://ex.com/24');
     store.close();
@@ -410,8 +416,8 @@ describe('HarStore upload at scale', () => {
     });
 
     const expectedPosts = Array.from({ length: SCALE_COUNT }, (_, i) => i).filter(i => i % 3 === 1).length;
-    expect(await store.filterIds('method:post')).toHaveLength(expectedPosts);
-    expect(await store.filterIds('')).toHaveLength(SCALE_COUNT);
+    expect(await filterIds(store, 'method:post')).toHaveLength(expectedPosts);
+    expect(await filterIds(store, '')).toHaveLength(SCALE_COUNT);
     store.close();
 
     const inspected = await HarStore.inspect(name);

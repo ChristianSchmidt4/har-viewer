@@ -240,8 +240,7 @@ is needed for development. See [TypeScript](#typescript) below.
    returning `{ count, ids }` (uses `compileFilterQuery`; an empty query gives `ids: null`
    without reading any key, so the count comes from `meta.count`; a non-empty query scans
    the rows, and a full pass over a complete DB is cached under the `filterCache` key so
-   reopening with the same filter reuses the saved indices), `filterIds(query)` (same,
-   returning the full array), and `exportBlob(ids)`.
+   reopening with the same filter reuses the saved indices), and `exportBlob(ids)`.
 11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
    text fields in one dialog, e.g. name + comment on import) show a modal `<dialog>` and resolve to
