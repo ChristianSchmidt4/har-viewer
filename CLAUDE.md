@@ -402,6 +402,8 @@ Examples:
 Uses CSS custom properties (`:root` in `main.css`) for consistent theming.
 Layout is a full-height flex column (header, filter bar, two-pane body);
 panes stack vertically under 900px width.
+Scrollbars use thin thumbs and transparent tracks for an overlay-like
+appearance; actual overlay behavior remains controlled by the browser and OS.
 
 ## Common Tasks
 
