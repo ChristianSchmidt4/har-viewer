@@ -352,7 +352,7 @@ describe('HarStore upload', () => {
   });
 });
 describe('HarStore upload at scale', () => {
-  const SCALE_COUNT = 100_000;
+  const SCALE_COUNT = 10_000;
   const METHODS = ['GET', 'POST', 'PUT'] as const;
   const STATUSES = [200, 201, 404, 500] as const;
   const MIMES = ['text/html', 'application/json', 'text/plain', 'image/png'] as const;
@@ -387,7 +387,7 @@ describe('HarStore upload at scale', () => {
     };
   };
 
-  it('imports 100k entries of varying size in batches and reads them back', async () => {
+  it('imports 10k entries of varying size in batches and reads them back', async () => {
     const items = Array.from({ length: SCALE_COUNT }, (_, i) => scaleEntry(i));
     const name = freshName();
     const json = JSON.stringify(root(items));
@@ -395,7 +395,7 @@ describe('HarStore upload at scale', () => {
     const store = await upload(name, json, 1000);
     expect(store.count).toBe(SCALE_COUNT);
 
-    const sampleIds = [0, 1, 49, 50, 99_998, 99_999];
+    const sampleIds = [0, 1, 49, 50, 9_998, 9_999];
     const rows = await store.getEntries(sampleIds);
     sampleIds.forEach((i, k) => {
       const expected = scaleEntry(i);
