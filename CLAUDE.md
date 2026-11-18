@@ -163,7 +163,7 @@ is needed for development. See [TypeScript](#typescript) below.
    through `HarStore.filterResult`, and only the rows of the visible window are
    read with `HarStore.getEntries`. `setStore(store)` attaches a complete database,
    `setFilter(query)` applies its filter, `getVisibleIds()` gives the current
-   filter result (used by export and the copy), and `selectSingleEntry(id)` lets the detail
+   filter result (used by export), and `selectSingleEntry(id)` lets the detail
    panel's timeline select one row programmatically.
    **Windowed rendering**: only the rows inside the `.request-table-scroll`
    viewport (plus `OVERSCAN_ROWS` above/below) are in the DOM; the rest is
@@ -240,10 +240,29 @@ is needed for development. See [TypeScript](#typescript) below.
    returning `{ count, ids }` (uses `compileFilterQuery`; an empty query gives `ids: null`
    without reading any key, so the count comes from `meta.count`; a non-empty query scans
    the rows, and a full pass over a complete DB is cached under the `filterCache` key so
-   reopening with the same filter reuses the saved indices), `exportBlob(ids)`, and
-   `copyRowsTo(target, ids, view, onProgress)`, which copies the given rows in chunks into
-   a new store (keeping the comment and HAR metadata) and saves the view state there.
-11. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
+   reopening with the same filter reuses the saved indices),    `exportBlob(ids)`. Filter tree: see below.
+   **Filter tree** (DB version 2, `FILTERS` object store, auto keys; the implicit
+   root is `ROOT_FILTER_ID` = 0 with no record): each saved filter is a
+   `FilterNode {id, parentId, query, ids}` holding only the matching row
+   indices of its parent scope. `persistFilter(query)` saves the query as a child
+   of the current level (rejected when empty, when it has no matches, or when it equals
+   the parent's or a sibling's expression) and makes it current; `navigateFilter(id)`
+   switches the current level (persisted in META key `currentFilter`, restored by
+   `open`); `deleteCurrentFilter()` removes the current node and all its subfilters
+   and moves to its parent (the root cannot be deleted); `filterPath()` gives
+   root→current summaries, `filterChildren()` the direct subfilters sorted by
+   matching row count (ascending), and `scopeCount` the row count of the current level. `filterResult`
+   scopes to the current node's ids (non-root results are not cached).
+11. **FilterTree** (`components/FilterTree.ts`) - Compact strip above the request
+   table (`#filter-tree`, hidden while no saved filters exist): one line of the path
+   (`All requests (N) › ancestor (n) › current`, ancestors clickable, plus a `×`
+   delete button after the current filter when it is not the root) and a
+   "Subfilters:" row of clickable chips, sorted by row count. Only the path and direct children are shown.
+   `index.ts` `renderFilterTree` / `navigateFilter` / `persistFilter` / `deleteFilter`
+   (confirmed with `askChoice`) drive it; the **Save filter** button (`#save-filter-btn`,
+   in the request filter bar next to the filter input, shown for a complete DB with a
+   filter set) saves the filter text as a child of the current level.
+12. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
    text fields in one dialog, e.g. name + comment on import) show a modal `<dialog>` and resolve to
    the chosen value / entered text, or `null` on cancel. All are centered on
@@ -261,12 +280,6 @@ is needed for development. See [TypeScript](#typescript) below.
   as a standalone `.har` (JSON) file, named `<database name>.filtered.har`
   (the name entered at import, not the original file name). The export also
   carries the stored comment as `log.comment`.
-  The **Copy filtered to new database** button (`#copy-filtered-btn`, `copyFilteredToDatabase`) is shown
-  only for complete databases with a filter set (`updateCopyButton`, called from `applyView`, `saveView`
-  and `closeStore`). It copies the visible rows through `HarStore.copyRowsTo` (in 100k-row batches,
-  `COPY_BATCH_SIZE`) into a new store named `<file name> - filter: <query>`, with the highlight rules
-  and custom columns but no filter. Progress is shown on the button (`Copying… N%`, disabled while
-  running). When done, a toast reports it is ready and `askChoice` offers to open it.
   Export is only offered for complete databases (the button shows a toast otherwise). The button's `title` tooltip states
   what/format is exported; keep it in sync if the export format or scope
   changes. After a file loads, `displayTimeRange` fills `#time-range`
@@ -349,7 +362,8 @@ Follow these patterns when adding new features:
    Timeline/Stats view instead
 6. The view state is persisted in the DB's META store, one key per item:
    `meta` (`HarMeta`, including `count`), `customColumns`, `highlightRules`, and
-   `filterCache` (`{ query, count, ids? }`). The filter query lives in
+   `filterCache` (`{ query, count, ids? }`), and `currentFilter` (id of the
+   filter tree node being viewed; 0 = all rows). The filter query lives in
    `filterCache`; `ids` is added once a full scan has run. No filter means no
    `filterCache` row. `HarStore.setView` (called from `index.ts` `saveView`) writes
    them and `HarStore.open` restores them (a legacy `meta.view` is still read when
@@ -506,7 +520,7 @@ Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
 - `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
 - `tests/dbOrder.test.ts` - DB order persistence, `applyDbOrder`, `moveName`
-- `tests/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), a 100k-entry upload scale test (GET/POST/PUT with varying body sizes), export incl. comment (Node env with `fake-indexeddb`)
+- `tests/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), a 100k-entry upload scale test (GET/POST/PUT with varying body sizes), export incl. comment, filter tree (persist, nested subfilters, navigation, reopen, rejected empty/duplicate filters) (Node env with `fake-indexeddb`)
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES
@@ -523,7 +537,7 @@ invalid-file error path. The file is generated in the test; nothing is
 uploaded. Jest ignores `*.spec.ts` files.
 
 The test also saves a screenshot after each step to `docs/screenshots/`
-(`01-start.png` ... `11-copy-filtered.png`); these are embedded below and in
+(`01-start.png` ... `10-invalid-file.png`); these are embedded below and in
 `README.md`'s Screenshots section. Re-run `npx playwright test` to refresh them.
 
 | Step | Screenshot |
@@ -538,7 +552,6 @@ The test also saves a screenshot after each step to `docs/screenshots/`
 | Multi-select Timeline | ![Timeline](docs/screenshots/08-timeline.png) |
 | Filter, highlight and column restored after reload | ![Restored view](docs/screenshots/09-restored-view.png) |
 | Invalid file kept as incomplete database | ![Invalid file](docs/screenshots/10-invalid-file.png) |
-| Copy filtered to new database | ![Copy filtered](docs/screenshots/11-copy-filtered.png) |
 
 Future enhancements could include:
 1. Component/integration tests for `RequestTable` and `DetailPanel`

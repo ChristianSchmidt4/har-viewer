@@ -448,6 +448,11 @@ button:hover {
   flex-shrink: 0;
 }
 
+#save-filter-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 #request-filter {
   flex: 1;
   padding: 0.5rem 0.75rem;
@@ -464,6 +469,78 @@ button:hover {
 
 .result-count {
   font-size: 0.8rem;
+  color: var(--dark-gray);
+  white-space: nowrap;
+}
+
+/* Filter tree: saved filters on the path to the current one, plus its subfilters */
+.filter-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.4rem 0.9rem;
+  background-color: var(--light-gray);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.filter-tree[hidden] {
+  display: none;
+}
+
+.ft-path,
+.ft-children {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ft-node,
+.ft-child {
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono-font);
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: white;
+}
+
+.ft-ancestor,
+.ft-child {
+  cursor: pointer;
+  color: var(--secondary-color);
+}
+
+.ft-delete {
+  padding: 0 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: var(--dark-gray);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.ft-delete:hover {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+.ft-current {
+  font-weight: bold;
+  border-color: var(--secondary-color);
+}
+
+.ft-sep,
+.ft-caption {
   color: var(--dark-gray);
   white-space: nowrap;
 }

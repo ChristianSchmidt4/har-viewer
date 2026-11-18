@@ -223,28 +223,6 @@ describe('HarStore', () => {
     expect(JSON.parse(await (await store.exportBlob([])).text()).log).not.toHaveProperty('comment');
     store.close();
   });
-
-  it('copies the given rows into a new complete store with the view state, keeping the comment', async () => {
-    const items = [ENTRIES[0], { invalid: true, reason: 'bad', raw: '{' }, ENTRIES[1], ENTRIES[2]];
-    const source = await load(freshName(), items);
-    await source.setComment('source comment');
-    const view = { filter: '', customColumns: [], highlightRules: ['status:404 => red'] };
-    const targetName = freshName();
-    const target = await HarStore.create(targetName, 'file.har - filter: method:get', 1234, 2000);
-    const progress: number[] = [];
-    await source.copyRowsTo(target, [0, 2, 3], view, (fraction) => progress.push(fraction));
-    expect(target.complete).toBe(true);
-    expect(target.count).toBe(3);
-    expect(target.comment).toBe('source comment');
-    expect(target.view).toEqual(view);
-    expect(progress.at(-1)).toBe(1);
-    const reopened = await HarStore.open(targetName);
-    expect(reopened.fileName).toBe('file.har - filter: method:get');
-    expect(JSON.parse(await (await reopened.exportBlob([0, 1, 2])).text()).log.entries).toEqual([ENTRIES[0], ENTRIES[1], ENTRIES[2]]);
-    expect(reopened.view.highlightRules).toEqual(['status:404 => red']);
-    reopened.close();
-    source.close();
-  });
 });
 
 describe('HarStore filtering on sub-attributes', () => {
@@ -462,6 +440,134 @@ describe('HarStore last used', () => {
     const listed = (await HarStore.list()).find(d => d.name === name);
     expect(listed?.lastUsedMs).toBe(reopened.lastUsedMs);
     expect(listed?.comment).toBe('');
+  });
+});
+
+describe('HarStore filter tree', () => {
+  // A store with the three ENTRIES: GET 200 (row 0), POST 500 (row 1), GET 404 (row 2).
+  const treeStore = async () => load(freshName(), ENTRIES);
+
+  it('saves a filter as a child of the current level with its row ids', async () => {
+    const store = await treeStore();
+    const child = await store.persistFilter('method:GET');
+    expect(child.query).toBe('method:GET');
+    expect(child.count).toBe(2);
+    expect(store.scopeCount).toBe(2);
+    expect(await filterIds(store, '')).toEqual([0, 2]);
+    expect(store.filterPath().map(node => node.query)).toEqual(['', 'method:GET']);
+  });
+
+  it('nests a subfilter inside a saved filter, filtering only its rows', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    const grandchild = await store.persistFilter('status:404');
+    expect(grandchild.count).toBe(1);
+    expect(store.filterPath().map(node => node.query)).toEqual(['', 'method:GET', 'status:404']);
+    expect(await filterIds(store, '')).toEqual([2]);
+  });
+
+  it('filters within the current filter without persisting it', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    expect(await filterIds(store, 'status:200')).toEqual([0]);
+    expect(store.filterChildren()).toEqual([]);
+  });
+
+  it('lists the direct children of the current level and navigates to them', async () => {
+    const store = await treeStore();
+    const getFilter = await store.persistFilter('method:GET');
+    await store.navigateFilter(0);
+    expect(store.scopeCount).toBe(3);
+    expect(store.filterChildren().map(node => node.id)).toEqual([getFilter.id]);
+    await store.navigateFilter(getFilter.id);
+    expect(store.scopeCount).toBe(2);
+  });
+
+  it('restores the current level after reopening the database', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    await store.persistFilter('status:404');
+    const name = store.name;
+    store.close();
+    const reopened = await HarStore.open(name);
+    expect(reopened.filterPath().map(node => node.query)).toEqual(['', 'method:GET', 'status:404']);
+    expect(await filterIds(reopened, '')).toEqual([2]);
+  });
+
+  it('rejects a filter whose result is empty', async () => {
+    const store = await treeStore();
+    await expect(store.persistFilter('status:999')).rejects.toThrow(/No requests match/);
+    expect(store.filterChildren()).toEqual([]);
+    expect(store.scopeCount).toBe(3);
+  });
+
+  it('rejects an empty expression', async () => {
+    const store = await treeStore();
+    await expect(store.persistFilter('   ')).rejects.toThrow();
+  });
+
+  it('rejects an expression equal to the parent or a sibling', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    await expect(store.persistFilter('method:GET')).rejects.toThrow(/already exists/);
+    await store.navigateFilter(0);
+    await store.persistFilter('method:POST');
+    await store.navigateFilter(0);
+    await expect(store.persistFilter('method:GET')).rejects.toThrow(/already exists/);
+    expect(store.filterChildren().map(node => node.query).sort()).toEqual(['method:GET', 'method:POST']);
+  });
+
+  it('allows the same expression under different parents', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    await store.navigateFilter(0);
+    await store.persistFilter('host:example.com');
+    await store.persistFilter('status:200');
+    await store.navigateFilter(0);
+    await store.persistFilter('status:200');
+    await store.navigateFilter(0);
+    expect(store.filterChildren().map(node => node.query).sort()).toEqual(['host:example.com', 'method:GET', 'status:200']);
+  });
+
+  it('rejects navigating to an unknown filter', async () => {
+    const store = await treeStore();
+    await expect(store.navigateFilter(12345)).rejects.toThrow(/no longer exists/);
+  });
+
+  it('deletes the current filter with its subfilters and moves to the parent', async () => {
+    const store = await treeStore();
+    const getFilter = await store.persistFilter('method:GET');
+    await store.persistFilter('status:404');
+    await store.navigateFilter(getFilter.id);
+    expect(store.currentDescendantCount()).toBe(1);
+    await store.deleteCurrentFilter();
+    expect(store.filterPath().map(node => node.query)).toEqual(['']);
+    expect(store.filterChildren()).toEqual([]);
+    expect(store.scopeCount).toBe(3);
+    const reopened = await HarStore.open(store.name);
+    expect(reopened.filterChildren()).toEqual([]);
+  });
+
+  it('refuses to delete the root', async () => {
+    const store = await treeStore();
+    await expect(store.deleteCurrentFilter()).rejects.toThrow(/root/);
+  });
+
+  it('lists the subfilters by matching row count, ascending', async () => {
+    const store = await treeStore();
+    await store.persistFilter('method:GET');
+    await store.navigateFilter(0);
+    await store.persistFilter('method:POST');
+    await store.navigateFilter(0);
+    await store.persistFilter('status:404');
+    await store.navigateFilter(0);
+    const counts = store.filterChildren().map(node => node.count);
+    expect(counts).toEqual([...counts].sort((a, b) => a - b));
+    const names = store.filterChildren().map(node => node.query);
+    const name = store.name;
+    store.close();
+    const reopened = await HarStore.open(name);
+    expect(reopened.filterChildren().map(node => node.query)).toEqual(names);
   });
 });
 

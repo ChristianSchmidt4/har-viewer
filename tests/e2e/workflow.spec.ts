@@ -231,48 +231,5 @@ test.describe('HAR viewer workflow', () => {
     await expect(dbRow(page, 'broken.har').locator('.db-open')).toBeDisabled();
     await shot(page, '10-invalid-file.png');
   });
-
-  test('copies the filtered requests into a new database with highlights and columns', async ({ page }) => {
-    await page.clock.setFixedTime(FIXED_NOW);
-    await page.goto('/');
-    await importFile(page, { name: 'copy.har', buffer: Buffer.from(JSON.stringify(fixtureHar())) });
-    await answerNameDialog(page, 'Copy DB', 'copy comment');
-    await expect(dbRow(page, 'Copy DB')).toHaveAttribute('data-state', 'complete');
-    await dbRow(page, 'Copy DB').locator('.db-open').click();
-    await expect(rows(page)).toHaveCount(4);
-
-    // Without a filter the copy button stays hidden.
-    await expect(page.locator('#copy-filtered-btn')).toBeHidden();
-
-    // Highlight and custom column are set up front; they must be carried over.
-    await page.locator('#highlight-input').fill('status:>=400 => red');
-    await page.locator('#highlight-input').press('Enter');
-    await page.locator('#custom-col-input').fill('reqheader:content-type');
-    await page.locator('#custom-col-input').press('Enter');
-    await page.locator('#request-filter').fill('method:post');
-    await page.locator('#request-filter').press('Enter');
-    await expect(rows(page)).toHaveCount(2);
-    await expect(page.locator('#copy-filtered-btn')).toBeVisible();
-    await shot(page, '11-copy-filtered.png');
-
-    // Copy: the new database is created in the background, then the user is asked to open it.
-    await page.locator('#copy-filtered-btn').click();
-    const dialog = page.locator('dialog.choice-dialog');
-    await expect(dialog).toContainText('Open the new database');
-    await dialog.getByRole('button', { name: 'Open (Recommended)', exact: true }).click();
-
-    // The new database is opened with only the filtered requests, no filter, and the copied view.
-    await expect(page.locator('#file-info')).toContainText('Copy DB - filter: method:post');
-    await expect(rows(page)).toHaveCount(2);
-    await expect(page.locator('#request-filter')).toHaveValue('');
-    await expect(page.locator('#highlight-rules')).toContainText('status:>=400');
-    await expect(page.locator('th.col-custom')).toHaveCount(1);
-    await expect(page.locator('#copy-filtered-btn')).toBeHidden();
-
-    // The source database is unchanged: still four requests.
-    await page.locator('#load-new-btn').click();
-    await expect(dbRow(page, 'filter: method:post')).toHaveAttribute('data-state', 'complete');
-    await expect(dbRow(page, 'Copy DB').filter({ hasNotText: 'filter:' }).locator('.db-open')).toBeEnabled();
-  });
 });
 

@@ -34,7 +34,6 @@
                 <div id="time-range" class="time-range"></div>
                 <div class="header-actions">
                     <button id="load-new-btn" type="button">Load New File</button>
-                    <button id="copy-filtered-btn" type="button" class="hidden" title="Copy the currently filtered requests into a new stored database (only when a filter is set)">Copy filtered to new database</button>
                     <button id="export-btn" type="button" title="Export the currently filtered requests as a .har (JSON) file">Export</button>
                 </div>
             </header>
@@ -43,6 +42,7 @@
                 <div id="request-list-container" class="request-list-container">
                     <div class="filter-bar">
                         <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
+                        <button id="save-filter-btn" type="button" class="hidden" title="Save the current filter as a subfilter of the level shown above (only when a filter is set)">Save filter</button>
                         <span id="result-count" class="result-count"></span>
                         <div id="custom-col-controls" class="custom-col-controls">
                             <input type="text" id="custom-col-input" placeholder="Add column, e.g. reqheader:X-Trace" />
@@ -69,6 +69,7 @@
                             <code>rescookie:track and status:200</code>
                         </div>
                     </div>
+                    <div id="filter-tree" class="filter-tree" hidden></div>
                     <div class="request-table-area">
                     <div class="request-table-scroll">
                         <table id="requests-table">

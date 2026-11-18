@@ -9,20 +9,26 @@ import { isInvalidItem } from './jsonArraySplitter.js';
 import type { HarEntryRaw, InvalidItem, ParsedEntry } from '@/types/har';
 import type { CustomColumn } from './customColumns.js';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DB_PREFIX = 'har:';
 const ROWS = 'rows';
 const META = 'meta';
+// Saved filters (the filter tree), one record per node with its row indices.
+const FILTERS = 'filters';
 const META_KEY = 'meta';
 const CUSTOM_COLUMNS_KEY = 'customColumns';
 const HIGHLIGHT_RULES_KEY = 'highlightRules';
 // Key of the last filter result in the META store (kept apart from meta so
 // filter changes do not rewrite the whole metadata record).
 const FILTER_CACHE_KEY = 'filterCache';
+// Key of the id of the filter node being viewed in the META store.
+const CURRENT_FILTER_KEY = 'currentFilter';
+// Id of the implicit root of the filter tree: all rows of the database.
+export const ROOT_FILTER_ID = 0;
+// Number of rows read per transaction while filtering a saved filter's rows.
+const FILTER_CHUNK_SIZE = 5000;
 // Number of rows read per transaction while exporting.
 const EXPORT_CHUNK_SIZE = 500;
-// Rows read and written per transaction when copying into a new database.
-const COPY_BATCH_SIZE = 100_000;
 
 export type StoredRow = HarEntryRaw | InvalidItem;
 
@@ -65,6 +71,27 @@ export interface FilterResult {
 
 function getFilterCacheValue(store: IDBObjectStore): Promise<FilterCache | null> {
   return request<unknown>(store.get(FILTER_CACHE_KEY)).then(value => (isValidFilterCache(value) ? value : null));
+}
+
+// A saved filter: a child of the node with id parentId (ROOT_FILTER_ID for
+// the first level) holding the indices of the rows that passed its query
+// within the parent's rows. Stored in the FILTERS store under an auto key.
+export interface FilterNode {
+  id: number;
+  parentId: number;
+  query: string;
+  ids: number[];
+}
+
+// A node of the filter tree as shown to the user.
+export interface FilterSummary {
+  id: number;
+  query: string;
+  count: number;
+}
+
+function summarize(node: FilterNode): FilterSummary {
+  return { id: node.id, query: node.query, count: node.ids.length };
 }
 
 interface HarMeta {
@@ -119,12 +146,31 @@ function transactionDone(tx: IDBTransaction): Promise<void> {
   });
 }
 
+// Reads every saved filter node of a database.
+function readFilterNodes(db: IDBDatabase): Promise<FilterNode[]> {
+  const nodes: FilterNode[] = [];
+  const tx = db.transaction(FILTERS, 'readonly');
+  const done = transactionDone(tx);
+  const cursorReq = tx.objectStore(FILTERS).openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) return;
+    const id = cursor.primaryKey as number;
+    const value = cursor.value as Omit<FilterNode, 'id'>;
+    nodes.push({ ...value, id });
+    cursor.continue();
+  };
+  return done.then(() => nodes);
+}
+
 function openDatabase(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(name, DB_VERSION);
     req.onupgradeneeded = () => {
-      req.result.createObjectStore(ROWS);
-      req.result.createObjectStore(META);
+      const db = req.result;
+      if (!db.objectStoreNames.contains(ROWS)) db.createObjectStore(ROWS);
+      if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
+      if (!db.objectStoreNames.contains(FILTERS)) db.createObjectStore(FILTERS, { autoIncrement: true });
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -152,6 +198,10 @@ export class HarStore {
 
   private root: Record<string, unknown>;
   private filterCache: FilterCache | null;
+  // Saved filters by id. Ids are assigned by the FILTERS store and never reused.
+  private filterNodes: Map<number, FilterNode>;
+  // Id of the filter node whose rows are shown (ROOT_FILTER_ID: all rows).
+  private currentFilterId: number;
   private readonly db: IDBDatabase;
   private readonly parser: HarParser;
 
@@ -171,7 +221,10 @@ export class HarStore {
     this.view = emptyDbView();
     this.root = meta.root;
     this.filterCache = null;
+    this.filterNodes = new Map();
+    this.currentFilterId = ROOT_FILTER_ID;
   }
+
 
   // Returns the stored metadata when a complete copy exists, otherwise null.
   static async inspect(name: string): Promise<HarMeta | null> {
@@ -216,6 +269,10 @@ export class HarStore {
     const store = new HarStore(name, db, meta);
     store.view = await HarStore.readView(metaStore, meta);
     store.filterCache = await getFilterCacheValue(db.transaction(META, 'readonly').objectStore(META));
+    const nodes = await readFilterNodes(db);
+    store.filterNodes = new Map(nodes.map(node => [node.id, node]));
+    const savedFilter = await request<unknown>(db.transaction(META, 'readonly').objectStore(META).get(CURRENT_FILTER_KEY));
+    store.currentFilterId = store.filterNodes.has(savedFilter as number) ? (savedFilter as number) : ROOT_FILTER_ID;
     return store;
   }
 
@@ -398,6 +455,9 @@ export class HarStore {
   // An empty query needs no key list: the count comes from meta.
   // A full pass over a complete database is cached for reuse when it is opened.
   async filterResult(query: string): Promise<FilterResult> {
+    const node = this.currentNode();
+    if (node) return this.filterNodeRows(node, query);
+
     const count = this.count;
     if (!query.trim()) {
       this.filterCache = null;
@@ -429,6 +489,121 @@ export class HarStore {
       this.saveFilterCache().catch(error => console.error('Could not cache the filter result', error));
     }
     return { count: ids.length, ids };
+  }
+
+  // The saved filter whose rows are shown, or undefined for all rows.
+  private currentNode(): FilterNode | undefined {
+    return this.filterNodes.get(this.currentFilterId);
+  }
+
+  // Rows of a saved filter that pass the query. An empty query gives the rows
+  // of the node itself. Not cached: a saved filter's rows are already a subset.
+  private async filterNodeRows(node: FilterNode, query: string): Promise<FilterResult> {
+    if (!query.trim()) return { count: node.ids.length, ids: node.ids };
+    const matches = compileFilterQuery(query);
+    const ids: number[] = [];
+    for (let i = 0; i < node.ids.length; i += FILTER_CHUNK_SIZE) {
+      const chunk = node.ids.slice(i, i + FILTER_CHUNK_SIZE);
+      const values = await this.readValues(chunk);
+      values.forEach((value, j) => {
+        const id = chunk[j]!;
+        if (value !== undefined && matches(this.toParsed(value as StoredRow, id))) ids.push(id);
+      });
+    }
+    return { count: ids.length, ids };
+  }
+
+  // Number of rows in the current scope: all rows at the root, otherwise the
+  // rows of the saved filter being viewed.
+  get scopeCount(): number {
+    return this.currentNode()?.ids.length ?? this.count;
+  }
+
+  // The filter tree path from all rows down to the current filter (inclusive).
+  filterPath(): FilterSummary[] {
+    const path: FilterSummary[] = [];
+    for (let node = this.currentNode(); node; node = this.filterNodes.get(node.parentId)) {
+      path.unshift(summarize(node));
+    }
+    return [{ id: ROOT_FILTER_ID, query: '', count: this.count }, ...path];
+  }
+
+  // The saved filters directly below the current filter.
+  filterChildren(): FilterSummary[] {
+    return this.childNodes(this.currentFilterId).map(summarize);
+  }
+
+  private childNodes(parentId: number): FilterNode[] {
+    return [...this.filterNodes.values()]
+      .filter(node => node.parentId === parentId)
+      .sort((a, b) => a.ids.length - b.ids.length || a.id - b.id);
+  }
+
+  // Number of saved filters below the current one (all levels).
+  currentDescendantCount(): number {
+    return this.descendantIds(this.currentFilterId).length;
+  }
+
+  // Ids of all saved filters below a node, children before their own children.
+  private descendantIds(id: number): number[] {
+    const found: number[] = [];
+    const queue = [id];
+    for (const parent of queue) {
+      for (const child of this.childNodes(parent)) {
+        found.push(child.id);
+        queue.push(child.id);
+      }
+    }
+    return found;
+  }
+
+  // Deletes the current saved filter together with all its subfilters (their
+  // rows are subsets of it), then makes its parent the current level.
+  async deleteCurrentFilter(): Promise<void> {
+    const node = this.currentNode();
+    if (!node) throw new Error('The root cannot be deleted.');
+    const removed = [node.id, ...this.descendantIds(node.id)];
+    const tx = this.db.transaction([FILTERS, META], 'readwrite');
+    for (const id of removed) tx.objectStore(FILTERS).delete(id);
+    tx.objectStore(META).put(node.parentId, CURRENT_FILTER_KEY);
+    await transactionDone(tx);
+    for (const id of removed) this.filterNodes.delete(id);
+    this.currentFilterId = node.parentId;
+  }
+
+  // Makes a saved filter (or the root, ROOT_FILTER_ID) the current level.
+  async navigateFilter(id: number): Promise<void> {
+    if (id !== ROOT_FILTER_ID && !this.filterNodes.has(id)) throw new Error('This filter no longer exists');
+    const tx = this.db.transaction(META, 'readwrite');
+    tx.objectStore(META).put(id, CURRENT_FILTER_KEY);
+    await transactionDone(tx);
+    this.currentFilterId = id;
+  }
+
+  // Saves a filter as a child of the current level, holding the rows that pass
+  // the query within the current scope, and makes it the current level. Empty
+  // results and expressions already used by the parent or a sibling are rejected.
+  async persistFilter(query: string): Promise<FilterSummary> {
+    const expression = query.trim();
+    if (!expression) throw new Error('Enter a filter before saving it.');
+    const parentId = this.currentFilterId;
+    const parent = this.currentNode();
+    if (parent?.query === expression || this.childNodes(parentId).some(node => node.query === expression)) {
+      throw new Error('A filter with this expression already exists at this level.');
+    }
+    const { ids } = await this.filterResult(expression);
+    if (!ids || ids.length === 0) throw new Error('No requests match this filter, so it was not saved.');
+
+    const record: Omit<FilterNode, 'id'> = { parentId, query: expression, ids };
+
+    const tx = this.db.transaction([FILTERS, META], 'readwrite');
+    const key = await request<IDBValidKey>(tx.objectStore(FILTERS).add(record));
+    const node: FilterNode = { ...record, id: key as number };
+    tx.objectStore(META).put(node.id, CURRENT_FILTER_KEY);
+    await transactionDone(tx);
+    this.filterNodes.set(node.id, node);
+    this.currentFilterId = node.id;
+    return summarize(node);
   }
 
   // Writes the in-memory filter cache under its own key of the META store.
@@ -471,20 +646,6 @@ export class HarStore {
     }
     parts.push(']', tail);
     return new Blob(parts, { type: 'application/json' });
-  }
-
-  // Copies the rows at the given indices (in order) into the target store,
-  // which must be a fresh store from create(). The target keeps this store's
-  // comment and document, and gets the given view state.
-  async copyRowsTo(target: HarStore, ids: number[], view: DbView, onProgress?: (fraction: number) => void): Promise<void> {
-    for (let i = 0; i < ids.length; i += COPY_BATCH_SIZE) {
-      const values = await this.readValues(ids.slice(i, i + COPY_BATCH_SIZE));
-      await target.writeBatch(values.filter((value): value is StoredRow => value !== undefined));
-      onProgress?.(Math.min(1, (i + COPY_BATCH_SIZE) / ids.length));
-    }
-    target.comment = this.comment;
-    await target.finish(this.root, this.uncompressedSize);
-    await target.setView(view);
   }
 
   close(): void {

@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- "Copy filtered to new database" (shown only when a filter is set) copies the filtered requests into a new stored database named `<file name> - filter: <query>`, in 100k-row batches, with highlight rules and custom columns; progress is shown on the button, and afterwards it asks whether to open the new database
 - Stored databases show when they were last used (set on import and every time they are opened)
 - Import asks for the database name and a comment in one dialog once the file is read; the comment is pre-filled with the HAR's `log.comment`
 - Request-table filter, custom columns and highlight rules are saved in each database and restored when it is opened
