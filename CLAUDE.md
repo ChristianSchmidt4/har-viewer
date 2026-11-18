@@ -251,7 +251,7 @@ is needed for development. See [TypeScript](#typescript) below.
    `open`); `deleteCurrentFilter()` removes the current node and all its subfilters
    and moves to its parent (the root cannot be deleted); `filterPath()` gives
    root→current summaries, `filterChildren()` the direct subfilters sorted by
-   matching row count (most rows first), and `scopeCount` the row count of the current level. `filterResult`
+   matching row count (fewest rows first), and `scopeCount` the row count of the current level. `filterResult`
    scopes to the current node's ids (non-root results are not cached).
 11. **FilterTree** (`components/FilterTree.ts`) - Compact strip above the request
    table (`#filter-tree`, hidden while no saved filters exist): one line of the path

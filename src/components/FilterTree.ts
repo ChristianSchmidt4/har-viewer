@@ -6,7 +6,7 @@ export interface FilterTreeOptions {
 }
 
 // One compact line showing the path from all requests to the current saved
-// filter, plus the direct subfilters as clickable chips (sorted by row count).
+// filter, plus the direct subfilters as clickable chips (sorted by row count, fewest first).
 export class FilterTree {
   private readonly el: HTMLElement;
   private readonly options: FilterTreeOptions;
