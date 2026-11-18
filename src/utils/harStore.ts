@@ -536,7 +536,7 @@ export class HarStore {
   private childNodes(parentId: number): FilterNode[] {
     return [...this.filterNodes.values()]
       .filter(node => node.parentId === parentId)
-      .sort((a, b) => a.ids.length - b.ids.length || a.id - b.id);
+      .sort((a, b) => b.ids.length - a.ids.length || a.id - b.id);
   }
 
   // Number of saved filters below the current one (all levels).

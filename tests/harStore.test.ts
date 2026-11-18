@@ -553,7 +553,7 @@ describe('HarStore filter tree', () => {
     await expect(store.deleteCurrentFilter()).rejects.toThrow(/root/);
   });
 
-  it('lists the subfilters by matching row count, ascending', async () => {
+  it('lists the subfilters by matching row count, descending', async () => {
     const store = await treeStore();
     await store.persistFilter('method:GET');
     await store.navigateFilter(0);
@@ -562,7 +562,7 @@ describe('HarStore filter tree', () => {
     await store.persistFilter('status:404');
     await store.navigateFilter(0);
     const counts = store.filterChildren().map(node => node.count);
-    expect(counts).toEqual([...counts].sort((a, b) => a - b));
+    expect(counts).toEqual([...counts].sort((a, b) => b - a));
     const names = store.filterChildren().map(node => node.query);
     const name = store.name;
     store.close();
