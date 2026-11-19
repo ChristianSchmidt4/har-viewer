@@ -504,7 +504,7 @@ and `noUncheckedIndexedAccess`). A few things to keep in mind:
 - Source imports keep an explicit `.js` extension (e.g.
   `import { HarParser } from '../utils/harParser.js'`) even though the
   files are `.ts` - this is required for native ESM resolution in the
-  browser/Vite. `jest.config.js` maps those back to the `.ts` source via
+  browser/Vite. `jest.config.mjs` maps those back to the `.ts` source via
   `moduleNameMapper`.
 - Shared data shapes live in `src/types/har.ts`; prefer extending those
   interfaces over inlining object types or using `any`.
