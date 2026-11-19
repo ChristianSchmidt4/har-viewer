@@ -450,7 +450,19 @@ button:hover {
 
 #save-filter-btn {
   flex-shrink: 0;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #fff;
+  color: var(--secondary-color);
+  cursor: pointer;
+}
+
+#save-filter-btn:hover {
+  border-color: var(--secondary-color);
 }
 
 #request-filter {

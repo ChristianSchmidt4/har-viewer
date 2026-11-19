@@ -121,7 +121,8 @@ class HarViewerApp {
       targetEl: document.getElementById('request-list-container')!,
       containerEl: document.querySelector('.main-layout')!,
       direction: 'horizontal',
-      min: 280
+      // Wide enough for the filter bar (filter input, save icon, result count, custom column box).
+      min: 480
     });
 
     console.log('HAR Viewer App initialized');

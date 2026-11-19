@@ -259,8 +259,8 @@ is needed for development. See [TypeScript](#typescript) below.
    delete button after the current filter when it is not the root) and a
    "Subfilters:" row of clickable chips, sorted by row count. Only the path and direct children are shown.
    `index.ts` `renderFilterTree` / `navigateFilter` / `persistFilter` / `deleteFilter`
-   (confirmed with `askChoice`) drive it; the **Save filter** button (`#save-filter-btn`,
-   in the request filter bar next to the filter input, shown for a complete DB with a
+   (confirmed with `askChoice`) drive it; the **Save filter** icon button (`#save-filter-btn`,
+   with a title tooltip, in the request filter bar next to the filter input, shown for a complete DB with a
    filter set) saves the filter text as a child of the current level.
 12. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
