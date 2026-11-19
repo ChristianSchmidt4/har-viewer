@@ -535,7 +535,7 @@ Vite, untouched by Babel. Run `npm run typecheck` separately (or via
 End-to-end tests (`tests/e2e/*.spec.ts`, Playwright + Chromium, config in
 `playwright.config.ts`, run with `npx playwright test`; Vite dev server is
 started automatically on port 3000): `tests/e2e/workflow.spec.ts` drives the
-app through import (name/comment dialog), open, highlight, filter, export, copy filtered to a new database,
+app through import (name/comment dialog), open, highlight, filter, export,
 custom column, multi-select, reload persistence and delete, plus the
 invalid-file error path. The file is generated in the test; nothing is
 uploaded. Jest ignores `*.spec.ts` files.
