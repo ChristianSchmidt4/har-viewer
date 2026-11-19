@@ -27,6 +27,12 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   same query is instant
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
+- Saved filter tree: a filter can be saved (icon next to the filter input) as a
+  subfilter of the current level, which then shows only its matching rows. The
+  path to the current filter and its direct subfilters (fewest rows first) are
+  shown above the table; subfilters can be navigated and the current filter can
+  be deleted with its subfilters. Expressions are unique per level and the
+  filter tree is stored in the database
 - Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
   (e.g. `status:>=400 => red fire`; the action defaults to `add`) color, tag or
   restyle matching rows with any CSS named color (`red`, `lightblue`, ...),
@@ -46,7 +52,6 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
 - Opens plain `.har` and gzip-compressed `.har.gz` files
 - Export of the currently filtered requests as a `.har` file, named after the
   database and carrying its comment
-- Copy of the currently filtered requests into a new stored database (only shown when a filter is set), with highlight rules and custom columns; you are then asked whether to open it
 - Resizable panes (drag the splitters) and resizable request-table columns
   (drag the `Path` or custom column header edge)
 - Large archives stay fast: only the visible rows of the request table are rendered
@@ -91,9 +96,6 @@ Filter, highlight rules and custom columns are restored when the database is reo
 ### Invalid file
 A file that is not valid JSON is kept as an incomplete database that cannot be opened.
 ![Invalid file](docs/screenshots/10-invalid-file.png)
-### Copy filtered to new database
-With a filter set, **Copy filtered to new database** copies the matching requests into a new stored database named `<file name> - filter: <query>`, carrying over highlight rules and custom columns. Afterwards you are asked whether to open it.
-![Copy filtered to new database](docs/screenshots/11-copy-filtered.png)
 ## Project Structure
 
 ```
@@ -137,8 +139,8 @@ har_viewer/
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- npm or yarn
+- Node.js 22.18 or higher (Node 22 is the supported line; `@babel/core` 8 requires 22.18+ or 24.11+)
+- npm
 
 ### Installation
 

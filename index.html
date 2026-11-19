@@ -34,7 +34,6 @@
                 <div id="time-range" class="time-range"></div>
                 <div class="header-actions">
                     <button id="load-new-btn" type="button">Load New File</button>
-                    <button id="copy-filtered-btn" type="button" class="hidden" title="Copy the currently filtered requests into a new stored database (only when a filter is set)">Copy filtered to new database</button>
                     <button id="export-btn" type="button" title="Export the currently filtered requests as a .har (JSON) file">Export</button>
                 </div>
             </header>
@@ -43,6 +42,7 @@
                 <div id="request-list-container" class="request-list-container">
                     <div class="filter-bar">
                         <input type="text" id="request-filter" placeholder="Filter e.g. status:200 method:GET host:example.com -type:image" />
+                        <button id="save-filter-btn" type="button" class="hidden" title="Save filter as subfilter" aria-label="Save filter as subfilter"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></button>
                         <span id="result-count" class="result-count"></span>
                         <div id="custom-col-controls" class="custom-col-controls">
                             <input type="text" id="custom-col-input" placeholder="Add column, e.g. reqheader:X-Trace" />
@@ -69,6 +69,7 @@
                             <code>rescookie:track and status:200</code>
                         </div>
                     </div>
+                    <div id="filter-tree" class="filter-tree" hidden></div>
                     <div class="request-table-area">
                     <div class="request-table-scroll">
                         <table id="requests-table">

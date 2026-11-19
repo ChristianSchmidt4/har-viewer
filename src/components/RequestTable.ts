@@ -244,6 +244,19 @@ export class RequestTable {
     return this.customColumns;
   }
 
+  // Re-filters from scratch: clears the selection and the filter cache, and
+  // applies `query` even if it equals the last applied query (e.g. after the
+  // store's scope changed).
+  refilter(query: string): void {
+    this.selectedEntryIds.clear();
+    this.lastSelectedEntryId = null;
+    this.onMultiSelect([]);
+    this.filterInputEl.value = query;
+    this.appliedQuery = null;
+    this.scrollEl.scrollTop = 0;
+    this.scheduleFilter();
+  }
+
   // Sets the filter query (e.g. restored from the database) and re-filters.
   setFilter(query: string): void {
     this.filterInputEl.value = query;
@@ -538,11 +551,9 @@ export class RequestTable {
   }
 
   private updateResultCount(): void {
-    const total = this.store?.count ?? 0;
+    const total = this.store?.scopeCount ?? 0;
     const visible = this.visibleCount;
-    this.resultCountEl.textContent = visible === total
-      ? `${total} requests`
-      : `${visible} / ${total} requests`;
+    this.resultCountEl.textContent = visible === total ? '' : `${visible} requests`;
   }
 }
 

@@ -3,11 +3,12 @@ import {FileDropZone} from './components/FileDropZone.js';
 import {RequestTable} from './components/RequestTable.js';
 import {HighlightBar} from './components/HighlightBar.js';
 import {DetailPanel} from './components/DetailPanel.js';
+import {FilterTree} from './components/FilterTree.js';
 import {askChoice, askFields, askText} from './components/ChoiceDialog.js';
 import {makeResizer} from './utils/resizer.js';
 import {addCustomColumn, removeCustomColumn} from './utils/customColumns.js';
 import {nextPaint, parseJsonFileStreaming} from './utils/fileLoader.js';
-import {HarStore, dbNameFor, emptyDbView} from './utils/harStore.js';
+import {HarStore, ROOT_FILTER_ID, dbNameFor, emptyDbView} from './utils/harStore.js';
 import type {DbView, StoredRow} from './utils/harStore.js';
 import {applyDbOrder, loadDbOrder, saveDbOrder} from './utils/dbOrder.js';
 import {DatabaseList} from './components/DatabaseList.js';
@@ -43,18 +44,23 @@ class HarViewerApp {
   // Background imports, keyed by database name.
   private readonly jobs = new Map<string, ImportJob>();
   // Progress (0..1) of the running filtered copy, or null when none is running.
-  private copyProgress: number | null = null;
   // Database names whose import is being started (guards against races).
   private readonly busy = new Set<string>();
   private databaseList: DatabaseList;
   private listRenderQueued = false;
   private highlightBar: HighlightBar;
+  private filterTree: FilterTree;
   // View state (filter, custom columns, highlight rules) of the shown database.
   private view: DbView = emptyDbView();
 
   constructor() {
     this.harParser = new HarParser();
     this.store = null;
+
+    this.filterTree = new FilterTree(document.getElementById('filter-tree')!, {
+      onNavigate: (id) => void this.navigateFilter(id),
+      onDelete: () => void this.deleteFilter()
+    });
 
     this.databaseList = new DatabaseList(document.getElementById('db-list')!, {
       onOpen: (name) => void this.showDatabase(name),
@@ -104,7 +110,7 @@ class HarViewerApp {
   private init(): void {
     document.getElementById('load-new-btn')!.addEventListener('click', () => this.resetToDropScreen());
     document.getElementById('export-btn')!.addEventListener('click', () => this.exportData());
-    document.getElementById('copy-filtered-btn')!.addEventListener('click', () => void this.copyFilteredToDatabase());
+    document.getElementById('save-filter-btn')!.addEventListener('click', () => void this.persistFilter());
     void this.renderDatabaseList();
 
     // Custom column control: add a column when Enter is pressed.
@@ -115,7 +121,8 @@ class HarViewerApp {
       targetEl: document.getElementById('request-list-container')!,
       containerEl: document.querySelector('.main-layout')!,
       direction: 'horizontal',
-      min: 280
+      // Wide enough for the filter bar (filter input, save icon, result count, custom column box).
+      min: 550
     });
 
     console.log('HAR Viewer App initialized');
@@ -258,6 +265,7 @@ class HarViewerApp {
       this.store = store;
       this.showStore(store);
       this.applyView(store.view);
+      this.renderFilterTree();
       this.updateFileInfo();
       void this.displayTimeRange(store);
     } catch (error) {
@@ -347,25 +355,95 @@ class HarViewerApp {
     this.highlightBar.setRules(rules);
     this.requestTable.setHighlightRules(rules);
     this.requestTable.setFilter(view.filter);
-    this.updateCopyButton();
+    this.updateSaveButton();
   }
 
-  // The copy button is offered only for a complete database with a filter set.
-  private updateCopyButton(): void {
-    const button = document.getElementById('copy-filtered-btn') as HTMLButtonElement;
-    const copying = this.copyProgress !== null;
-    const enabled = copying || (!!this.store?.complete && this.view.filter.trim() !== '');
-    button.classList.toggle('hidden', !enabled);
-    button.disabled = copying;
-    button.textContent = copying
-      ? `Copying… ${Math.round((this.copyProgress ?? 0) * 100)}%`
-      : 'Copy filtered to new database';
+  // Saves the current filter text as a subfilter of the shown level, then
+  // moves to it so its rows are shown.
+  private async persistFilter(): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    const query = this.view.filter.trim();
+    try {
+      await store.persistFilter(query);
+    } catch (error) {
+      this.showMessage(error instanceof Error ? error.message : 'Could not save the filter.');
+      return;
+    }
+    this.requestTable.refilter('');
+    this.saveView({filter: ''});
+    this.renderFilterTree();
+    this.showMessage(`Saved filter "${query}".`, 'info');
+  }
+
+  // Moves to a level of the filter tree (ROOT_FILTER_ID for all requests).
+  private async navigateFilter(id: number): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    try {
+      await store.navigateFilter(id);
+    } catch (error) {
+      this.showMessage(error instanceof Error ? error.message : 'Could not open this filter.');
+      return;
+    }
+    this.requestTable.refilter('');
+    this.saveView({filter: ''});
+    this.renderFilterTree();
+  }
+
+  // Deletes the shown saved filter and its subfilters after confirmation, then
+  // moves to its parent level.
+  private async deleteFilter(): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    const current = store.filterPath().at(-1);
+    if (!current || current.id === ROOT_FILTER_ID) return;
+    const subfilters = store.currentDescendantCount();
+    const detail = subfilters > 0 ? ` and its ${subfilters} subfilter${subfilters === 1 ? '' : 's'}` : '';
+    const choice = await askChoice(
+      `Delete the filter "${current.query}"${detail}? This cannot be undone.`,
+      [{value: 'delete', label: 'Delete'}]
+    );
+    if (choice !== 'delete') return;
+    try {
+      await store.deleteCurrentFilter();
+    } catch (error) {
+      this.showMessage(error instanceof Error ? error.message : 'Could not delete the filter.');
+      return;
+    }
+    this.requestTable.refilter('');
+    this.saveView({filter: ''});
+    this.renderFilterTree();
+    this.showMessage(`Deleted filter "${current.query}".`, 'info');
+  }
+
+  // Shows the path to the current level and its subfilters. Hidden while
+  // there are no saved filters.
+  private renderFilterTree(): void {
+    const store = this.store;
+    if (!store?.complete) {
+      this.filterTree.hide();
+      return;
+    }
+    const path = store.filterPath();
+    const children = store.filterChildren();
+    if (path.length === 1 && children.length === 0) {
+      this.filterTree.hide();
+      return;
+    }
+    this.filterTree.render(path, children);
+  }
+
+  // The save button is offered for a complete database with a filter set.
+  private updateSaveButton(): void {
+    const button = document.getElementById('save-filter-btn') as HTMLButtonElement;
+    button.classList.toggle('hidden', !(this.store?.complete && this.view.filter.trim() !== ''));
   }
 
   // Updates the view state and saves it in the metadata of the shown database.
   private saveView(patch: Partial<DbView>): void {
     this.view = {...this.view, ...patch};
-    this.updateCopyButton();
+    this.updateSaveButton();
     const store = this.store;
     if (!store) return;
     store.setView(this.view).catch(error => {
@@ -388,7 +466,8 @@ class HarViewerApp {
     const store = this.store;
     this.requestTable.setStore(null);
     this.store = null;
-    this.updateCopyButton();
+    this.updateSaveButton();
+    this.filterTree.hide();
     if (store && ![...this.jobs.values()].some(job => job.store === store)) {
       store.close();
     }
@@ -462,73 +541,6 @@ class HarViewerApp {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } finally {
       exportButton.disabled = false;
-    }
-  }
-
-  // Copies the requests passing the filter into a new stored database named
-  // "<file name> - filter: <query>", carrying over the custom columns and
-  // highlight rules (not the filter itself). Progress is shown on the copy
-  // button; the user is told when the new database is ready and asked whether
-  // to open it.
-  private async copyFilteredToDatabase(): Promise<void> {
-    const store = this.store;
-    const query = this.view.filter.trim();
-    if (!store || !store.complete || !query || this.copyProgress !== null) return;
-
-    const ids = this.requestTable.getVisibleIds();
-    if (ids.length === 0) {
-      this.showMessage('No requests match the filter, so there is nothing to copy.', 'info');
-      return;
-    }
-
-    const fileName = `${store.fileName} - filter: ${query}`;
-    const modified = Date.now();
-    const name = dbNameFor(fileName, modified);
-    if (this.jobs.has(name)) {
-      this.showMessage('This database is already being created.', 'info');
-      return;
-    }
-
-    let target: HarStore;
-    try {
-      target = await HarStore.create(name, fileName, store.fileSize, modified);
-    } catch (error) {
-      console.error('Error creating filtered database:', error);
-      this.showMessage('Could not create the new database.');
-      return;
-    }
-
-    this.copyProgress = 0;
-    this.updateCopyButton();
-    try {
-      const view: DbView = {
-        filter: '',
-        customColumns: this.view.customColumns,
-        highlightRules: this.view.highlightRules
-      };
-      await store.copyRowsTo(target, ids, view, (fraction) => {
-        this.copyProgress = fraction;
-        this.updateCopyButton();
-      });
-      this.copyProgress = null;
-      this.updateCopyButton();
-      void this.renderDatabaseList();
-      this.showMessage(`"${fileName}" is ready: ${ids.length} requests copied.`, 'info', 8000);
-
-      const choice = await askChoice(
-        `Open the new database "${fileName}" now?`,
-        [
-          {value: 'open', label: 'Open (Recommended)'},
-          {value: 'later', label: 'Not now'}
-        ]
-      );
-      if (choice === 'open') await this.showDatabase(name);
-    } catch (error) {
-      console.error('Error copying filtered requests:', error);
-      this.copyProgress = null;
-      this.updateCopyButton();
-      void this.renderDatabaseList();
-      this.showMessage('Copying the filtered requests failed. The partial database was kept as incomplete.');
     }
   }
 

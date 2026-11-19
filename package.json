@@ -1,6 +1,6 @@
 {
   "name": "har-viewer",
-  "version": "1.36.0",
+  "version": "1.54.0",
   "description": "A client-side HAR (HTTP Archive) viewer inspired by Fiddler",
   "main": "src/index.ts",
   "scripts": {
@@ -17,7 +17,7 @@
     "viewer",
     "web-debugging"
   ],
-  "author": "Claude Code Developer",
+  "author": "Schmidt4, Christian",
   "license": "SEE LICENSE IN LICENSE.md",
   "devDependencies": {
     "@babel/core": "^8.1.0",
