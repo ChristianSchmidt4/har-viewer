@@ -511,6 +511,8 @@ and `noUncheckedIndexedAccess`). A few things to keep in mind:
 
 ## Testing
 
+Requires Node.js 22.18+ (`@babel/core` 8 needs 22.18+ or 24.11+; CI tests on Node 22).
+
 Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
 - `tests/harParser.test.ts` - parsing, formatting, derived fields, timing normalization
 - `tests/filterParser.test.ts` - filter query parsing and matching

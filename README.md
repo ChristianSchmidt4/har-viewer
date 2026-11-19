@@ -139,8 +139,8 @@ har_viewer/
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- npm or yarn
+- Node.js 22.18 or higher (Node 22 is the supported line; `@babel/core` 8 requires 22.18+ or 24.11+)
+- npm
 
 ### Installation
 
