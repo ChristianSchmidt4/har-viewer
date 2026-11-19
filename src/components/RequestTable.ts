@@ -553,9 +553,7 @@ export class RequestTable {
   private updateResultCount(): void {
     const total = this.store?.scopeCount ?? 0;
     const visible = this.visibleCount;
-    this.resultCountEl.textContent = visible === total
-      ? `${total} requests`
-      : `${visible} / ${total} requests`;
+    this.resultCountEl.textContent = visible === total ? '' : `${visible} requests`;
   }
 }
 
