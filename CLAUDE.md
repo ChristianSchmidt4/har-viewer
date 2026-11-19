@@ -92,7 +92,9 @@ is needed for development. See [TypeScript](#typescript) below.
    and `rescookie:name` to a cell value.
 7. **resizer** (`resizer.ts`) - `makeResizer({ splitterEl, targetEl,
    containerEl, direction, min })` drag-resizes a pane via a splitter element
-   (used for the main list/detail split and the Request/Response split).
+   (used for the main list/detail split and the Request/Response split). The
+   main split's minimum for the left request pane is 550px (set in `index.ts`),
+   so the filter bar fits.
 8. **virtualWindow** (`virtualWindow.ts`) - `computeWindowRange(scrollTop,
    viewportHeight, rowHeight, total, overscan)` returns the `[start, end)`
    row slice to render for a fixed-row-height list (used by `RequestTable`).

@@ -27,6 +27,12 @@ A client-side HTTP Archive (HAR) viewer inspired by Fiddler, built with modern w
   same query is instant
 - Filterable request table (Fiddler-style) with a simple query syntax
   (`status:200 method:GET host:example.com -type:image duration:>100`)
+- Saved filter tree: a filter can be saved (icon next to the filter input) as a
+  subfilter of the current level, which then shows only its matching rows. The
+  path to the current filter and its direct subfilters (fewest rows first) are
+  shown above the table; subfilters can be navigated and the current filter can
+  be deleted with its subfilters. Expressions are unique per level and the
+  filter tree is stored in the database
 - Highlight rules below the table: `<filter> => [toggle|add|remove] <class>...`
   (e.g. `status:>=400 => red fire`; the action defaults to `add`) color, tag or
   restyle matching rows with any CSS named color (`red`, `lightblue`, ...),
