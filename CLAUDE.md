@@ -48,7 +48,7 @@ is needed for development. See [TypeScript](#typescript) below.
 
 ## Key Components
 
-### Utilities (`src/utils/`)
+### Utilities (`src/har/`, `src/common/`, ...)
 1. **HarParser** (`harParser.ts`) - Parses HAR JSON into structured entries;
    also derives `host`, `path`, `protocol`, `contentType`, `relativeStartMs`
    (time since the first request in the archive) and normalized `timings`
@@ -56,9 +56,10 @@ is needed for development. See [TypeScript](#typescript) below.
    "not applicable" sentinel normalized to `0`) per entry. `contentType` is `''` when the
    response has neither a MIME type nor a body (`getContentType(mime, hasBody)`)
    and `other` for a body with an unknown MIME type. Provides
-   `formatBytes` / `formatTime` / `formatRelativeTime` / `formatDateTime` /
-   `formatClockTime` (`HH:MM:SS.mmm`) / `formatDurationClock` (`HH:MM:SS.mmm`
-   duration, used by the aggregate Stats panel).
+   `formatBytes` / `formatBytesExact` (exact count with separators, shown on hover) /
+   `formatTime` / `formatRelativeTime` / `formatDateTime` /
+   `formatClockTime` (`HH:MM:SS.mmm`) / `formatDuration` (human-readable,
+   e.g. `2m 05s`, used by the aggregate Stats panel).
 2. **filterParser** (`filterParser.ts`) - Parses and applies the request
    table's filter query syntax (`parseFilterQuery`, `filterEntries`).
 3. **httpFormatter** (`httpFormatter.ts`) - Builds raw wire-format HTTP text
@@ -74,7 +75,7 @@ is needed for development. See [TypeScript](#typescript) below.
    color names, `HIGHLIGHT_EMOJIS` maps emoji class names to symbols, and
    `TEXT_STYLE_CLASSES` (`bold`, `italic`, `underline`, `strikethrough`) have CSS rules.
    Each color needs a matching `#requests-table tbody tr.hl-<color>` rule in
-   `main.css`; `tests/highlightRules.test.ts` enforces this.
+   `main.css` (now `src/table/table.css`); `tests/table/highlightRules.test.ts` enforces this.
 5. **aggregateStats** (`aggregateStats.ts`) - `computeAggregateStats(entries)`
    reduces a set of entries into request count, bytes sent/received (split
    into headers/body), start/end timestamps, sequence vs. aggregate session
@@ -108,7 +109,7 @@ is needed for development. See [TypeScript](#typescript) below.
    `nextPaint()`, which yields so progress UI can repaint before a
    synchronous step.
 
-### Types (`src/types/`)
+### Types (`src/common/types/`)
 - **har.ts** - Shared TypeScript interfaces for the raw HAR 1.2 JSON shape
   (`HarData`, `HarEntryRaw`, `HarRequestRaw`, `HarResponseRaw`,
   `HarTimingsRaw`, ...) and the structured shape `HarParser` produces
@@ -116,7 +117,7 @@ is needed for development. See [TypeScript](#typescript) below.
   `ParsedTimings`, ...). Import `ParsedEntry` whenever you need the type of
   an entry flowing through the table/filter/detail panel.
 
-### Components (`src/components/`)
+### Components (`src/start/`, `src/table/`, `src/detail/`, `src/filter/`, `src/pivot/`, `src/common/`)
 1. **FileDropZone** (`FileDropZone.ts`) - The import target ("HAR Upload"
    panel, below the stored-database list on the landing screen): drag-and-drop plus a "Select File…" button (native file picker).
    Validates the file looks like a `.har`/JSON file, then hands the raw `File`
@@ -174,7 +175,7 @@ is needed for development. See [TypeScript](#typescript) below.
    and re-renders only when the visible index range changes. `rowHeight` is
    measured from the first rendered row (default 28px) - keep row CSS
    (`#requests-table tbody td`) fixed-height/`nowrap` so the estimate holds.
-   The range math lives in `utils/virtualWindow.ts` (`computeWindowRange`).
+   The range math lives in `table/virtualWindow.ts` (`computeWindowRange`).
    **Highlighting**: `setHighlightRules(rules)` stores the rules;
    `buildRow` adds the `hl-<class>` classes from `computeHighlightClasses`
    to the `<tr>` and prepends the `hl-emoji` span for emoji classes to the
@@ -255,7 +256,7 @@ is needed for development. See [TypeScript](#typescript) below.
    root→current summaries, `filterChildren()` the direct subfilters sorted by
    matching row count (fewest rows first), and `scopeCount` the row count of the current level. `filterResult`
    scopes to the current node's ids (non-root results are not cached).
-11. **FilterTree** (`components/FilterTree.ts`) - Compact strip above the request
+11. **FilterTree** (`filter/FilterTree.ts`) - Compact strip above the request
    table (`#filter-tree`, hidden while no saved filters exist): one line of the path
    (`All requests (N) › ancestor (n) › current`, ancestors clickable, plus a `×`
    delete button after the current filter when it is not the root) and a
@@ -264,11 +265,23 @@ is needed for development. See [TypeScript](#typescript) below.
    (confirmed with `askChoice`) drive it; the **Save filter** icon button (`#save-filter-btn`,
    with a title tooltip, in the request filter bar next to the filter input, shown for a complete DB with a
    filter set) saves the filter text as a child of the current level.
-12. **ChoiceDialog** (`components/ChoiceDialog.ts`) - `askChoice(message, choices)`
+12. **ChoiceDialog** (`common/ChoiceDialog.ts`) - `askChoice(message, choices)`
    and `askText(message, defaultValue)` and `askFields(fields)` (several labelled
    text fields in one dialog, e.g. name + comment on import) show a modal `<dialog>` and resolve to
    the chosen value / entered text, or `null` on cancel. All are centered on
    screen (`.choice-dialog` in `main.css`).
+
+### Pivot (`src/pivot/`, see `src/pivot/README.md`)
+- **PivotOverlay** (`PivotOverlay.ts`) - Fullscreen overlay opened from the header
+  **Pivot** button (`#pivot-btn`). Base set: a saved filter-tree node (`HarStore.idsInScope`)
+  or a custom query, stored per database with the layout. New pivots start with Sum of body size.
+  Zones: Filters, Rows, Columns, Values (add/remove chips). Recomputes
+  on changes and via `refresh()`, which `index.ts` calls from `renderFilterTree` and `saveView`.
+  Its CSS is `pivot.css`.
+- **pivotModel** (`pivotModel.ts`) - Pure logic: `buildPivot` (one bucket per row and column
+  prefix, so subtotals come free), `aggregate`, `coerceNumber`, `heatmapColor`, `cellFilterQuery`,
+  and `recordPassesFilters`/`cellExclusion`/`cellTerms` (the Filter zone's include and `NOT` exclusion terms; cell include terms), and `cellStatistics` (per-cell statistics behind the tooltip, `PivotResult.stats`).
+  The `AGGREGATIONS`, `BUILTIN_FIELDS`, and `NUMERIC_SOURCES` lists are its public constants.
 
 ### Orchestration
 - **Main Application** (`src/index.ts`) - Reads the file locally in batches
@@ -311,14 +324,12 @@ is needed for development. See [TypeScript](#typescript) below.
 
 Follow these patterns when adding new features:
 
-1. **New Utilities**: Place in `src/utils/` with clear, single-responsibility functions
-2. **UI Components**: Place in `src/components/` as modular, reusable elements
-3. **Shared Types**: Add/extend interfaces in `src/types/har.ts` rather than
+1. **New Utilities**: Place in the feature module it belongs to (`src/<feature>/`), or in `src/common/` only if two or more modules use it
+2. **UI Components**: Place in the feature module directory (`src/<feature>/`) with its stylesheet (`<feature>.css`) and a `README.md`
+3. **Shared Types**: Add/extend interfaces in `src/common/types/har.ts` rather than
    inlining object shapes; import them with `import type { ... }`
-4. **Styles**: Add to `src/styles/main.css` (all styling, including the
-   drop screen, lives in this one file; split it out only if it grows
-   unwieldy)
-5. **Tests**: Place in `tests/` directory mirroring the `src/` structure, as `.test.ts` files
+4. **Styles**: Each module imports its own CSS from its component file; shared styles go in `src/common/base.css`
+5. **Tests**: Place in `tests/<feature>/` mirroring the `src/<feature>/` directory, as `.test.ts` files
 
 ## Architecture Notes
 
@@ -371,6 +382,8 @@ Follow these patterns when adding new features:
    them and `HarStore.open` restores them (a legacy `meta.view` is still read when
    the new keys are missing). Cached indices are reused on reopen while the query
    and `count` match.
+   The pivot's base set and layout are stored as `pivotState` (`DbView.pivot`);
+   `PivotOverlay.setState` restores them on open and `index.ts` saves them on change.
 
 ### State Management
 All HAR entries live in IndexedDB (`utils/harStore.ts`, one database per file
@@ -502,7 +515,7 @@ and `noUncheckedIndexedAccess`). A few things to keep in mind:
   types without checking them - `npm run typecheck` is the source of truth
   for type errors, `npm test` only proves the code runs correctly.
 - Source imports keep an explicit `.js` extension (e.g.
-  `import { HarParser } from '../utils/harParser.js'`) even though the
+  `import { HarParser } from '../har/harParser.js'`) even though the
   files are `.ts` - this is required for native ESM resolution in the
   browser/Vite. `jest.config.mjs` maps those back to the `.ts` source via
   `moduleNameMapper`.
@@ -513,18 +526,14 @@ and `noUncheckedIndexedAccess`). A few things to keep in mind:
 
 Requires Node.js 22.18+ (`@babel/core` 8 needs 22.18+ or 24.11+; CI tests on Node 22).
 
-Unit tests live in `tests/`, run with `npm test` (Jest + jsdom):
-- `tests/harParser.test.ts` - parsing, formatting, derived fields, timing normalization
-- `tests/filterParser.test.ts` - filter query parsing and matching
-- `tests/aggregateStats.test.ts` - multi-select aggregate stats computation
-- `tests/highlightRules.test.ts` - highlight rule parsing and CSS color coverage
-- `tests/virtualWindow.test.ts` - windowed-rendering range computation
-- `tests/fileLoaderStream.test.ts` - streaming JSON parse (plain/gzip), equivalence with `JSON.parse`, progress (Node env)
-- `tests/jsonArraySplitter.test.ts` - per-item array splitting across chunk sizes, escapes, batching, invalid-item placeholders, error cases (Node env)
-- `tests/fileLoader.test.ts` - FileReader text reading and progress (jsdom)
-- `tests/fileLoaderGzip.test.ts` - gzip decompression and progress (Node env, since jsdom lacks `DecompressionStream`)
-- `tests/dbOrder.test.ts` - DB order persistence, `applyDbOrder`, `moveName`
-- `tests/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), a 100k-entry upload scale test (GET/POST/PUT with varying body sizes), export incl. comment, filter tree (persist, nested subfilters, navigation, reopen, rejected empty/duplicate filters) (Node env with `fake-indexeddb`)
+Unit tests live in `tests/<module>/` (one directory per `src/` module), run with `npm test` (Jest + jsdom):
+- `tests/har/` - `harParser`, `harStore` (IndexedDB, `fake-indexeddb`), `fileLoader`, `fileLoaderGzip`, `fileLoaderStream`, `jsonArraySplitter`
+- `tests/filter/filterParser.test.ts` - filter query parsing and matching
+- `tests/table/` - `highlightRules` (rule parsing, CSS color coverage), `virtualWindow`
+- `tests/start/dbOrder.test.ts` - DB order persistence, `applyDbOrder`, `moveName`
+- `tests/detail/aggregateStats.test.ts` - multi-select aggregate stats computation
+- `tests/pivot/pivotModel.test.ts` - pivot status ranges, coercion, aggregations, nested subtotals, heatmap, cell filters, exclusion and cell include filters, cell statistics
+- `tests/har/harStore.test.ts` - IndexedDB store: naming, view state persistence (`setView`), create/finish/inspect/reopen, list/comment, last-used time (`markUsed`), filtering by range and header/cookie sub-attributes, highlighting of DB-read rows, streamed upload in batches (invalid placeholders, HAR comment), a 100k-entry upload scale test (GET/POST/PUT with varying body sizes), export incl. comment, filter tree (persist, nested subfilters, navigation, reopen, rejected empty/duplicate filters) (Node env with `fake-indexeddb`)
 
 Jest needs `jest-environment-jsdom`, `@babel/preset-env` and
 `@babel/preset-typescript` (see `babel.config.cjs`) to transform TS/ES

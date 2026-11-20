@@ -1,0 +1,332 @@
+/* Fullscreen pivot overlay, opened from the header "Pivot" button. */
+.pivot-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.pivot-overlay[hidden] {
+  display: none;
+}
+
+.pivot-panel {
+  margin: 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg, #fff);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.pivot-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #ddd;
+}
+
+.pivot-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.pivot-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.pivot-close {
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+}
+
+.pivot-base {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #eee;
+}
+
+.pivot-meta {
+  padding: 4px 14px;
+  font-size: 12px;
+  color: #666;
+}
+
+.pivot-message {
+  padding: 6px 14px;
+  color: #a33;
+}
+
+.pivot-available {
+  border: 1px dashed #bbb;
+  border-radius: 4px;
+  padding: 6px;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pivot-available .pivot-hint {
+  color: #888;
+  font-size: 12px;
+}
+
+.pivot-zones {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #eee;
+}
+
+/* Attributes pool sits above Rows and Columns only; the group spans two grid columns. */
+.pivot-rc {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pivot-rc-zones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pivot-zone {
+  border: 1px dashed #bbb;
+  border-radius: 4px;
+  padding: 6px;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pivot-zone-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.pivot-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pivot-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: #eef3fb;
+  font-size: 12px;
+}
+
+.pivot-chip[draggable="true"] {
+  cursor: grab;
+}
+
+.pivot-chip.dragging {
+  opacity: 0.4;
+}
+
+.pivot-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.pivot-zone-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.pivot-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pivot-table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px 14px;
+  min-height: 0;
+}
+
+.pivot-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pivot-table tr[hidden] {
+  display: none;
+}
+
+.pivot-table th,
+.pivot-table td {
+  border: 1px solid #e2e2e2;
+  padding: 3px 8px;
+  text-align: right;
+}
+
+.pivot-table th {
+  background: #f6f6f6;
+  text-align: left;
+}
+
+/* The whole header block sticks, so both header rows stay visible while scrolling. */
+.pivot-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.pivot-row-head {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #f6f6f6;
+}
+
+/* Long paths are cut off at 200px; the full label is in the tooltip. */
+.pivot-row-label {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.pivot-toggle,
+.pivot-toggle-spacer {
+  display: inline-block;
+  width: 14px;
+  margin-right: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.pivot-toggle {
+  cursor: pointer;
+}
+
+.pivot-collapse-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.pivot-collapse-all:hover {
+  background: #e2e2e2;
+}
+
+.pivot-corner,
+.pivot-value-head {
+  text-align: center;
+}
+
+.pivot-corner {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+.pivot-total {
+  font-weight: 600;
+}
+
+.pivot-cell {
+  cursor: pointer;
+  position: relative;
+}
+
+.pivot-exclude,
+.pivot-include {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 2px 3px;
+  display: inline-flex;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #5f6368;
+  line-height: 0;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.pivot-include {
+  left: 18px;
+}
+
+.pivot-cell:hover .pivot-exclude,
+.pivot-cell:hover .pivot-include {
+  opacity: 1;
+}
+
+.pivot-exclude:hover {
+  color: #d93025;
+}
+
+.pivot-include:hover {
+  color: #188038;
+}
+
+.pivot-cell.pivot-selected {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+}
+
+.pivot-heatmap {
+  color: #111;
+}
+
+.pivot-footer {
+  padding: 8px 14px;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+}
+
+.pivot-empty {
+  padding: 24px;
+  color: #666;
+}

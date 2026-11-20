@@ -1,21 +1,23 @@
-import {HarParser} from './utils/harParser.js';
-import {FileDropZone} from './components/FileDropZone.js';
-import {RequestTable} from './components/RequestTable.js';
-import {HighlightBar} from './components/HighlightBar.js';
-import {DetailPanel} from './components/DetailPanel.js';
-import {FilterTree} from './components/FilterTree.js';
-import {askChoice, askFields, askText} from './components/ChoiceDialog.js';
-import {makeResizer} from './utils/resizer.js';
-import {addCustomColumn, removeCustomColumn} from './utils/customColumns.js';
-import {nextPaint, parseJsonFileStreaming} from './utils/fileLoader.js';
-import {HarStore, ROOT_FILTER_ID, dbNameFor, emptyDbView} from './utils/harStore.js';
-import type {DbView, StoredRow} from './utils/harStore.js';
-import {applyDbOrder, loadDbOrder, saveDbOrder} from './utils/dbOrder.js';
-import {DatabaseList} from './components/DatabaseList.js';
-import type {DatabaseListItem} from './components/DatabaseList.js';
-import {parseHighlightRule} from './utils/highlightRules.js';
-import type {HighlightRule} from './utils/highlightRules.js';
-import type {HarData} from './types/har.js';
+import './common/base.css';
+import {HarParser} from './har/harParser.js';
+import {FileDropZone} from './start/FileDropZone.js';
+import {DatabaseList} from './start/DatabaseList.js';
+import type {DatabaseListItem} from './start/DatabaseList.js';
+import {FilterTree} from './filter/FilterTree.js';
+import {RequestTable} from './table/RequestTable.js';
+import {HighlightBar} from './table/HighlightBar.js';
+import {DetailPanel} from './detail/DetailPanel.js';
+import {askChoice, askFields, askText} from './common/ChoiceDialog.js';
+import {makeResizer} from './common/resizer.js';
+import {addCustomColumn, removeCustomColumn} from './table/customColumns.js';
+import {nextPaint, parseJsonFileStreaming} from './har/fileLoader.js';
+import {HarStore, ROOT_FILTER_ID, dbNameFor, emptyDbView} from './har/harStore.js';
+import type {DbView, StoredRow} from './har/harStore.js';
+import {applyDbOrder, loadDbOrder, saveDbOrder} from './start/dbOrder.js';
+import {parseHighlightRule} from './table/highlightRules.js';
+import {PivotOverlay} from './pivot/PivotOverlay.js';
+import type {HighlightRule} from './table/highlightRules.js';
+import type {HarData} from './common/types/har.js';
 import pkg from '../package.json';
 
 // Number of log entries written to the store and rendered per progressive batch.
@@ -50,12 +52,24 @@ class HarViewerApp {
   private listRenderQueued = false;
   private highlightBar: HighlightBar;
   private filterTree: FilterTree;
+  private pivot: PivotOverlay;
   // View state (filter, custom columns, highlight rules) of the shown database.
   private view: DbView = emptyDbView();
 
   constructor() {
     this.harParser = new HarParser();
     this.store = null;
+    this.pivot = new PivotOverlay({
+      getStore: () => this.store,
+      getCustomColumns: () => this.requestTable.getCustomColumns(),
+      showMessage: (message, variant) => this.showMessage(message, variant),
+      // Stored without refreshing the pivot, which would report the same change again.
+      onStateChange: (state) => {
+        if (!this.store) return;
+        this.view = {...this.view, pivot: state};
+        void this.store.setView(this.view);
+      }
+    });
 
     this.filterTree = new FilterTree(document.getElementById('filter-tree')!, {
       onNavigate: (id) => void this.navigateFilter(id),
@@ -109,6 +123,7 @@ class HarViewerApp {
 
   private init(): void {
     document.getElementById('load-new-btn')!.addEventListener('click', () => this.resetToDropScreen());
+    document.getElementById('pivot-btn')!.addEventListener('click', () => this.pivot.open());
     document.getElementById('export-btn')!.addEventListener('click', () => this.exportData());
     document.getElementById('save-filter-btn')!.addEventListener('click', () => void this.persistFilter());
     void this.renderDatabaseList();
@@ -355,6 +370,7 @@ class HarViewerApp {
     this.highlightBar.setRules(rules);
     this.requestTable.setHighlightRules(rules);
     this.requestTable.setFilter(view.filter);
+    this.pivot.setState(view.pivot);
     this.updateSaveButton();
   }
 
@@ -421,6 +437,7 @@ class HarViewerApp {
   // there are no saved filters.
   private renderFilterTree(): void {
     const store = this.store;
+    this.pivot.refresh();
     if (!store?.complete) {
       this.filterTree.hide();
       return;
@@ -443,6 +460,7 @@ class HarViewerApp {
   // Updates the view state and saves it in the metadata of the shown database.
   private saveView(patch: Partial<DbView>): void {
     this.view = {...this.view, ...patch};
+    this.pivot.refresh();
     this.updateSaveButton();
     const store = this.store;
     if (!store) return;

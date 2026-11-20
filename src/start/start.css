@@ -1,0 +1,294 @@
+/* ---------------------------------------------------------------- */
+/* Drop screen (landing view)                                       */
+/* ---------------------------------------------------------------- */
+
+#drop-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background-color: var(--light-gray);
+  padding: 2rem 1rem;
+}
+
+#drop-panel {
+  width: min(480px, 100%);
+  text-align: center;
+  padding: 3rem 2.5rem;
+  border: 3px dashed var(--border-color);
+  border-radius: 12px;
+  background-color: var(--background-color);
+  transition: border-color 0.15s, background-color 0.15s, transform 0.1s;
+}
+
+#drop-panel.drag-active {
+  border-color: var(--secondary-color);
+  background-color: rgba(52, 152, 219, 0.08);
+  transform: scale(1.01);
+}
+
+.drop-icon {
+  font-size: 2.5rem;
+  color: var(--secondary-color);
+  margin-bottom: 0.5rem;
+}
+
+#drop-panel h1 {
+  font-size: 1.6rem;
+  margin-bottom: 0.75rem;
+  color: var(--primary-color);
+}
+
+.drop-subtitle {
+  font-size: 1.1rem;
+  color: var(--text-color);
+  margin-bottom: 0.5rem;
+}
+
+.drop-or {
+  color: var(--dark-gray);
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#browse-btn {
+  background-color: var(--secondary-color);
+  color: white;
+  border: none;
+  padding: 0.7rem 1.6rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+#browse-btn:hover {
+  background-color: #2980b9;
+}
+
+/* Stored database list (landing screen) */
+
+.db-list-section {
+  width: min(860px, 100%);
+  background-color: var(--background-color);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.db-list-heading {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  color: var(--primary-color);
+}
+
+.db-list-empty {
+  font-size: 0.9rem;
+  color: var(--dark-gray);
+}
+
+.db-list {
+  list-style: none;
+  padding: 2px 0;
+  margin: 0;
+  /* Scrolls only when the stored databases do not fit in the viewport. */
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+}
+
+.db-row {
+  position: relative;
+  display: grid;
+  /* status | name + time | comment | actions | drag grip */
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr) auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.db-row.dragging {
+  opacity: 0.4;
+}
+
+.db-row.drop-before::before,
+.db-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background-color: var(--secondary-color);
+}
+
+.db-row.drop-before::before {
+  top: -2px;
+}
+
+.db-row.drop-after::after {
+  bottom: -2px;
+}
+
+.db-status {
+  min-width: 0;
+}
+
+.db-main {
+  min-width: 0;
+}
+
+.db-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-file-time {
+  color: var(--text-secondary, #666);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.db-details {
+  font-size: 0.8rem;
+  color: var(--dark-gray);
+  margin-top: 0.2rem;
+}
+
+.db-badge {
+  display: inline-block;
+  min-width: 6.5rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  color: white;
+}
+
+.db-badge.complete {
+  background-color: #27ae60;
+}
+
+.db-badge.incomplete {
+  background-color: #c0392b;
+}
+
+.db-badge.importing {
+  background-color: var(--secondary-color);
+}
+
+/* Comment cell: the edit icon only appears while the cell is hovered or focused. */
+.db-comment-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.db-comment {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
+.db-comment.empty {
+  color: var(--text-secondary, #666);
+  font-style: normal;
+}
+
+.db-edit-comment {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.db-comment-cell:hover .db-edit-comment,
+.db-comment-cell:focus-within .db-edit-comment,
+.db-edit-comment:focus-visible {
+  opacity: 1;
+}
+
+.db-progress-track {
+  margin-top: 0.4rem;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--light-gray);
+  overflow: hidden;
+}
+
+.db-progress-bar {
+  height: 100%;
+  width: 0;
+  background-color: var(--secondary-color);
+  transition: width 0.2s linear;
+}
+
+.db-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.db-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.db-icon-btn svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.db-icon-btn:hover:not(:disabled) {
+  background-color: var(--light-gray);
+}
+
+.db-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.db-icon-btn.db-delete:hover:not(:disabled) {
+  color: #c0392b;
+  border-color: #c0392b;
+}
+
+.db-drag-handle {
+  cursor: grab;
+  user-select: none;
+  padding: 0 0.25rem;
+  color: var(--text-muted, #888);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.db-drag-handle:active {
+  cursor: grabbing;
+}
+
+.drop-privacy-note {
+  margin-top: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--dark-gray);
+}
